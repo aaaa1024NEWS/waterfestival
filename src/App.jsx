@@ -55,10 +55,29 @@ const TREASURE_COLUMNS = [
   }
 ];
 
+const PLAY_MODES = [
+  {
+    id: 'pc',
+    icon: 'PC',
+    label: 'PC 버전',
+    description: '키보드와 마우스로 정교하게 플레이'
+  },
+  {
+    id: 'mobile',
+    icon: 'M',
+    label: '모바일 버전',
+    description: '원형 패드와 액션 버튼으로 플레이'
+  }
+];
+
 function App() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
+  const joystickRef = useRef(null);
+  const joystickActiveRef = useRef(false);
   const [playMode, setPlayMode] = useState(null);
+  const [selectedModeIndex, setSelectedModeIndex] = useState(0);
+  const [joystickThumb, setJoystickThumb] = useState({ x: 0, y: 0 });
   const [gameState, setGameState] = useState('START');
   const [stageBadge, setStageBadge] = useState(INITIAL_STAGE_BADGE);
   const [transitionMessage, setTransitionMessage] = useState(
@@ -86,16 +105,56 @@ function App() {
   const startGame = () => gameRef.current?.start();
   const nextStage = () => gameRef.current?.nextStage();
   const restartGame = () => gameRef.current?.restart();
-  const chooseMode = (mode) => setPlayMode(mode);
+  const selectedMode = PLAY_MODES[selectedModeIndex];
+  const chooseSelectedMode = () => setPlayMode(selectedMode.id);
+  const selectPreviousMode = () =>
+    setSelectedModeIndex((index) => (index + PLAY_MODES.length - 1) % PLAY_MODES.length);
+  const selectNextMode = () =>
+    setSelectedModeIndex((index) => (index + 1) % PLAY_MODES.length);
   const backToModeSelect = () => setPlayMode(null);
 
-  const holdMove = (direction) => (event) => {
+  const updateJoystick = (event) => {
     event.preventDefault();
-    gameRef.current?.setMoveDirection(direction);
+    const rect = joystickRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const rawX = event.clientX - centerX;
+    const rawY = event.clientY - centerY;
+    const maxDistance = rect.width * 0.33;
+    const distance = Math.hypot(rawX, rawY);
+    const clampRatio = distance > maxDistance ? maxDistance / distance : 1;
+    const x = rawX * clampRatio;
+    const y = rawY * clampRatio;
+
+    setJoystickThumb({ x, y });
+
+    if (x < -12) {
+      gameRef.current?.setMoveDirection('left');
+    } else if (x > 12) {
+      gameRef.current?.setMoveDirection('right');
+    } else {
+      gameRef.current?.stopMove();
+    }
   };
 
-  const stopMove = (event) => {
+  const startJoystick = (event) => {
+    joystickActiveRef.current = true;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateJoystick(event);
+  };
+
+  const moveJoystick = (event) => {
+    if (!joystickActiveRef.current) return;
+    updateJoystick(event);
+  };
+
+  const releaseJoystick = (event) => {
     event.preventDefault();
+    joystickActiveRef.current = false;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    setJoystickThumb({ x: 0, y: 0 });
     gameRef.current?.stopMove();
   };
 
@@ -119,9 +178,9 @@ function App() {
     gameRef.current?.releaseDash();
   };
 
-  const shootForward = (event) => {
+  const shootDown = (event) => {
     event.preventDefault();
-    gameRef.current?.shootForward();
+    gameRef.current?.shootDown();
   };
 
   return (
@@ -140,7 +199,7 @@ function App() {
         </header>
 
         <div className="canvas-frame">
-          <canvas ref={canvasRef} width="800" height="500" tabIndex="0" />
+          <canvas ref={canvasRef} width="1920" height="1080" tabIndex="0" />
 
           {!playMode && (
             <div className="overlay overlay-start retro-screen">
@@ -150,18 +209,27 @@ function App() {
                 플레이 환경에 맞춰 조작 방식을 먼저 선택하세요.
               </p>
 
-              <div className="mode-grid">
-                <button className="mode-card" type="button" onClick={() => chooseMode('pc')}>
-                  <span className="mode-icon">PC</span>
-                  <strong>PC 버전</strong>
-                  <small>키보드와 마우스로 정교하게 플레이</small>
+              <div className="mode-carousel" aria-label="플레이 버전 선택">
+                <button className="mode-arrow" type="button" onClick={selectPreviousMode}>
+                  ◀
                 </button>
-                <button className="mode-card cyan" type="button" onClick={() => chooseMode('mobile')}>
-                  <span className="mode-icon">M</span>
-                  <strong>모바일 버전</strong>
-                  <small>화면 위 버츄얼 패드로 바로 조작</small>
+                <button
+                  className={`mode-card selected ${selectedMode.id === 'mobile' ? 'cyan' : ''}`}
+                  type="button"
+                  onClick={chooseSelectedMode}
+                >
+                  <span className="mode-icon">{selectedMode.icon}</span>
+                  <strong>{selectedMode.label}</strong>
+                  <small>{selectedMode.description}</small>
+                </button>
+                <button className="mode-arrow" type="button" onClick={selectNextMode}>
+                  ▶
                 </button>
               </div>
+              <button className="primary-button" type="button" onClick={chooseSelectedMode}>
+                {selectedMode.label}으로 시작
+              </button>
+              <div className="mode-hint">화살표로 버전을 바꾸고 시작 버튼을 누르세요.</div>
             </div>
           )}
 
@@ -186,7 +254,7 @@ function App() {
                       <p>좌/우 패드: 이동</p>
                       <p>JUMP: 2단 점프와 벽점프</p>
                       <p>DASH: 돌진</p>
-                      <p>SHOT: 바라보는 방향으로 물총</p>
+                      <p>SHOT: 아래 방향 고정 물총</p>
                     </>
                   ) : (
                     <>
@@ -258,34 +326,27 @@ function App() {
 
           {playMode === 'mobile' && gameState === 'PLAYING' && (
             <div className="mobile-pad" onContextMenu={(event) => event.preventDefault()}>
-              <div className="pad-cluster move-cluster" aria-label="이동 패드">
-                <button
-                  className="pad-button arrow"
-                  type="button"
-                  onPointerDown={holdMove('left')}
-                  onPointerUp={stopMove}
-                  onPointerCancel={stopMove}
-                  onPointerLeave={stopMove}
-                >
-                  ◀
-                </button>
-                <button
-                  className="pad-button arrow"
-                  type="button"
-                  onPointerDown={holdMove('right')}
-                  onPointerUp={stopMove}
-                  onPointerCancel={stopMove}
-                  onPointerLeave={stopMove}
-                >
-                  ▶
-                </button>
+              <div
+                ref={joystickRef}
+                className="joystick"
+                aria-label="이동 원형 패드"
+                onPointerDown={startJoystick}
+                onPointerMove={moveJoystick}
+                onPointerUp={releaseJoystick}
+                onPointerCancel={releaseJoystick}
+                onPointerLeave={releaseJoystick}
+              >
+                <span
+                  className="joystick-thumb"
+                  style={{ transform: `translate(${joystickThumb.x}px, ${joystickThumb.y}px)` }}
+                />
               </div>
 
               <div className="pad-cluster action-cluster" aria-label="액션 패드">
                 <button
                   className="pad-button action shot"
                   type="button"
-                  onPointerDown={shootForward}
+                  onPointerDown={shootDown}
                 >
                   SHOT
                 </button>
@@ -317,7 +378,7 @@ function App() {
         <footer className="game-footer">
           <p>
             {playMode === 'mobile'
-              ? '모바일 버전에서는 화면 위 패드로 이동, 점프, 대시, 물총을 사용할 수 있습니다.'
+              ? '모바일 버전에서는 원형 패드로 좌우 이동하고, SHOT은 아래 방향으로 발사됩니다.'
               : 'PC 버전에서는 게임 화면을 한 번 클릭하면 조작 초점이 바로 돌아옵니다.'}
           </p>
           <p>

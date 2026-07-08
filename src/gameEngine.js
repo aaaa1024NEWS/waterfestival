@@ -1246,40 +1246,43 @@ export function createWaterFestivalGame({
             });
 
             // 2. 미션 정보 패널 (우측 상단)
+            const missionPanelX = canvas.width - 225;
             ctx.fillStyle = 'rgba(7, 10, 19, 0.9)';
-            ctx.fillRect(575, 15, 210, 75);
+            ctx.fillRect(missionPanelX, 15, 210, 75);
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 2;
-            ctx.strokeRect(575, 15, 210, 75);
+            ctx.strokeRect(missionPanelX, 15, 210, 75);
 
             ctx.fillStyle = '#60a5fa';
             ctx.font = 'bold 11px "Galmuri11"';
-            ctx.fillText('🎯 현재 스테이지 목표', 585, 33);
+            ctx.fillText('🎯 현재 스테이지 목표', missionPanelX + 10, 33);
             
             ctx.fillStyle = '#ffffff';
             ctx.font = '10px "Galmuri11"';
             if (collectCount === 9) {
                 ctx.fillStyle = '#34d399';
-                ctx.fillText('★ 보물 9종 전원 획득!', 585, 52);
+                ctx.fillText('★ 보물 9종 전원 획득!', missionPanelX + 10, 52);
                 ctx.fillStyle = '#fef08a';
-                ctx.fillText('☞ 우측 끝 아치 게이트로!', 585, 68);
+                ctx.fillText('☞ 우측 끝 아치 게이트로!', missionPanelX + 10, 68);
             } else {
                 ctx.fillStyle = '#f1f5f9';
-                ctx.fillText(`보물 탐색 중 (${collectCount}/9)`, 585, 52);
+                ctx.fillText(`보물 탐색 중 (${collectCount}/9)`, missionPanelX + 10, 52);
                 ctx.fillStyle = '#fb7185';
-                ctx.fillText('⚠️ 보물을 다 모아야 통과가능', 585, 68);
+                ctx.fillText('⚠️ 보물을 다 모아야 통과가능', missionPanelX + 10, 68);
             }
 
             // 3. 대시 미터기 (하단 중앙)
+            const dashMeterX = canvas.width / 2 - 80;
+            const dashMeterY = canvas.height - 45;
             ctx.fillStyle = 'rgba(7, 10, 19, 0.75)';
-            ctx.fillRect(320, 455, 160, 20);
+            ctx.fillRect(dashMeterX, dashMeterY, 160, 20);
             ctx.fillStyle = player.dashCooldown === 0 ? '#10b981' : '#334155';
             const coolPct = player.dashCooldown === 0 ? 1 : (32 - player.dashCooldown) / 32;
-            ctx.fillRect(322, 457, 156 * coolPct, 16);
+            ctx.fillRect(dashMeterX + 2, dashMeterY + 2, 156 * coolPct, 16);
             ctx.fillStyle = '#ffffff';
             ctx.font = '9px "Galmuri11"';
             ctx.textAlign = 'center';
-            ctx.fillText(player.dashCooldown === 0 ? 'DASH (Shift/C) 사용가능' : '대시 쿨타임 충전 중...', 400, 469);
+            ctx.fillText(player.dashCooldown === 0 ? 'DASH (Shift/C) 사용가능' : '대시 쿨타임 충전 중...', canvas.width / 2, dashMeterY + 14);
         }
         let animationFrameId = null;
 
@@ -1392,6 +1395,14 @@ export function createWaterFestivalGame({
             shootWater();
         }
 
+        function shootDown() {
+            if (gameState !== 'PLAYING') return;
+
+            mouse.x = player.x + player.width / 2;
+            mouse.y = player.y + player.height / 2 + 160;
+            shootWater();
+        }
+
         canvas.addEventListener('click', handleCanvasClick);
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
@@ -1413,6 +1424,7 @@ export function createWaterFestivalGame({
             pressDash,
             releaseDash,
             shootForward,
+            shootDown,
             destroy() {
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
