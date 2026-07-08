@@ -1306,6 +1306,49 @@ export function createWaterFestivalGame({
             setTimeout(forceFocusOnGame, 50);
         }
 
+        function setMoveDirection(direction) {
+            if (gameState !== 'PLAYING') return;
+
+            keys.a = direction === 'left';
+            keys.d = direction === 'right';
+        }
+
+        function stopMove() {
+            keys.a = false;
+            keys.d = false;
+        }
+
+        function pressJump() {
+            if (!keys.w) {
+                handleJump();
+            }
+            keys.w = true;
+        }
+
+        function releaseJump() {
+            keys.w = false;
+        }
+
+        function pressDash() {
+            if (!keys.shift) {
+                handleDash();
+            }
+            keys.shift = true;
+        }
+
+        function releaseDash() {
+            keys.shift = false;
+        }
+
+        function shootForward() {
+            if (gameState !== 'PLAYING') return;
+
+            const dir = player.facing === 'left' ? -1 : 1;
+            mouse.x = player.x + player.width / 2 + dir * 120;
+            mouse.y = player.y + player.height / 2;
+            shootWater();
+        }
+
         canvas.addEventListener('click', handleCanvasClick);
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
@@ -1320,6 +1363,13 @@ export function createWaterFestivalGame({
             start: startGame,
             nextStage,
             restart: startGame,
+            setMoveDirection,
+            stopMove,
+            pressJump,
+            releaseJump,
+            pressDash,
+            releaseDash,
+            shootForward,
             destroy() {
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);

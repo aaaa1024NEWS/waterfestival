@@ -58,6 +58,7 @@ const TREASURE_COLUMNS = [
 function App() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
+  const [playMode, setPlayMode] = useState(null);
   const [gameState, setGameState] = useState('START');
   const [stageBadge, setStageBadge] = useState(INITIAL_STAGE_BADGE);
   const [transitionMessage, setTransitionMessage] = useState(
@@ -85,14 +86,52 @@ function App() {
   const startGame = () => gameRef.current?.start();
   const nextStage = () => gameRef.current?.nextStage();
   const restartGame = () => gameRef.current?.restart();
+  const chooseMode = (mode) => setPlayMode(mode);
+  const backToModeSelect = () => setPlayMode(null);
+
+  const holdMove = (direction) => (event) => {
+    event.preventDefault();
+    gameRef.current?.setMoveDirection(direction);
+  };
+
+  const stopMove = (event) => {
+    event.preventDefault();
+    gameRef.current?.stopMove();
+  };
+
+  const pressJump = (event) => {
+    event.preventDefault();
+    gameRef.current?.pressJump();
+  };
+
+  const releaseJump = (event) => {
+    event.preventDefault();
+    gameRef.current?.releaseJump();
+  };
+
+  const pressDash = (event) => {
+    event.preventDefault();
+    gameRef.current?.pressDash();
+  };
+
+  const releaseDash = (event) => {
+    event.preventDefault();
+    gameRef.current?.releaseDash();
+  };
+
+  const shootForward = (event) => {
+    event.preventDefault();
+    gameRef.current?.shootForward();
+  };
 
   return (
     <main className="app-shell">
       <section className="game-shell" aria-label="정남진 장흥 물축제 홍보 게임">
         <header className="game-header">
           <div>
-            <h1>대모험! 장흥 9경9미9품 투어</h1>
-            <p>3개의 넓은 스테이지를 탐험하며 장흥의 아름다움을 만끽하세요.</p>
+            <p className="header-kicker">RETRO WATER FESTIVAL QUEST</p>
+            <h1 className="retro-logo">대모험! 장흥 9경9미9품 투어</h1>
+            <p>3개의 스테이지를 달리며 장흥의 보물을 모으세요.</p>
           </div>
           <aside className="stage-badge" aria-live="polite">
             <span>제19회 정남진 장흥 물축제</span>
@@ -103,8 +142,34 @@ function App() {
         <div className="canvas-frame">
           <canvas ref={canvasRef} width="800" height="500" tabIndex="0" />
 
-          {gameState === 'START' && (
+          {!playMode && (
+            <div className="overlay overlay-start retro-screen">
+              <p className="pixel-eyebrow">SELECT PLAY STYLE</p>
+              <div className="overlay-title logo-title">대모험! 장흥 9경9미9품 투어</div>
+              <p className="overlay-copy compact">
+                플레이 환경에 맞춰 조작 방식을 먼저 선택하세요.
+              </p>
+
+              <div className="mode-grid">
+                <button className="mode-card" type="button" onClick={() => chooseMode('pc')}>
+                  <span className="mode-icon">PC</span>
+                  <strong>PC 버전</strong>
+                  <small>키보드와 마우스로 정교하게 플레이</small>
+                </button>
+                <button className="mode-card cyan" type="button" onClick={() => chooseMode('mobile')}>
+                  <span className="mode-icon">M</span>
+                  <strong>모바일 버전</strong>
+                  <small>화면 위 버츄얼 패드로 바로 조작</small>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {playMode && gameState === 'START' && (
             <div className="overlay overlay-start">
+              <p className="pixel-eyebrow">
+                {playMode === 'mobile' ? 'MOBILE PAD READY' : 'KEYBOARD READY'}
+              </p>
               <div className="overlay-title">장흥 탐험기: 27개의 보물</div>
               <p className="overlay-kicker">3개의 아름다운 장흥 랜드마크를 달리는 파쿠르 액션</p>
               <p className="overlay-copy">
@@ -116,10 +181,21 @@ function App() {
               <div className="start-grid">
                 <div>
                   <h2>아크로바틱 조작법</h2>
-                  <p>A / D 또는 ← / → 이동</p>
-                  <p>W / Space 2단 점프</p>
-                  <p>LShift / C 대시</p>
-                  <p>마우스 왼쪽 클릭 물방울 물총</p>
+                  {playMode === 'mobile' ? (
+                    <>
+                      <p>좌/우 패드: 이동</p>
+                      <p>JUMP: 2단 점프와 벽점프</p>
+                      <p>DASH: 돌진</p>
+                      <p>SHOT: 바라보는 방향으로 물총</p>
+                    </>
+                  ) : (
+                    <>
+                      <p>A / D 또는 ← / → 이동</p>
+                      <p>W / Space 2단 점프</p>
+                      <p>LShift / C 대시</p>
+                      <p>마우스 왼쪽 클릭 물방울 물총</p>
+                    </>
+                  )}
                 </div>
                 <div>
                   <h2>3대 모험 코스</h2>
@@ -129,14 +205,20 @@ function App() {
                 </div>
               </div>
 
-              <button className="primary-button" type="button" onClick={startGame}>
-                장흥 투어 모험 개시
-              </button>
+              <div className="button-row">
+                <button className="primary-button" type="button" onClick={startGame}>
+                  장흥 투어 모험 개시
+                </button>
+                <button className="ghost-button" type="button" onClick={backToModeSelect}>
+                  모드 다시 선택
+                </button>
+              </div>
             </div>
           )}
 
           {gameState === 'TRANSITION' && (
             <div className="overlay overlay-transition">
+              <p className="pixel-eyebrow">AREA COMPLETE</p>
               <div className="overlay-title">STAGE CLEAR!</div>
               <p className="transition-message">{transitionMessage}</p>
               <p className="overlay-copy compact">
@@ -150,6 +232,7 @@ function App() {
 
           {gameState === 'CLEAR' && (
             <div className="overlay overlay-clear">
+              <p className="pixel-eyebrow">QUEST COMPLETE</p>
               <div className="overlay-title">27대 보물 마스터!</div>
               <p className="transition-message">
                 장흥의 9경 9미 9품을 완벽하게 등재하고 수집했습니다.
@@ -172,12 +255,70 @@ function App() {
               </button>
             </div>
           )}
+
+          {playMode === 'mobile' && gameState === 'PLAYING' && (
+            <div className="mobile-pad" onContextMenu={(event) => event.preventDefault()}>
+              <div className="pad-cluster move-cluster" aria-label="이동 패드">
+                <button
+                  className="pad-button arrow"
+                  type="button"
+                  onPointerDown={holdMove('left')}
+                  onPointerUp={stopMove}
+                  onPointerCancel={stopMove}
+                  onPointerLeave={stopMove}
+                >
+                  ◀
+                </button>
+                <button
+                  className="pad-button arrow"
+                  type="button"
+                  onPointerDown={holdMove('right')}
+                  onPointerUp={stopMove}
+                  onPointerCancel={stopMove}
+                  onPointerLeave={stopMove}
+                >
+                  ▶
+                </button>
+              </div>
+
+              <div className="pad-cluster action-cluster" aria-label="액션 패드">
+                <button
+                  className="pad-button action shot"
+                  type="button"
+                  onPointerDown={shootForward}
+                >
+                  SHOT
+                </button>
+                <button
+                  className="pad-button action jump"
+                  type="button"
+                  onPointerDown={pressJump}
+                  onPointerUp={releaseJump}
+                  onPointerCancel={releaseJump}
+                  onPointerLeave={releaseJump}
+                >
+                  JUMP
+                </button>
+                <button
+                  className="pad-button action dash"
+                  type="button"
+                  onPointerDown={pressDash}
+                  onPointerUp={releaseDash}
+                  onPointerCancel={releaseDash}
+                  onPointerLeave={releaseDash}
+                >
+                  DASH
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <footer className="game-footer">
           <p>
-            캐릭터가 움직이지 않는 경우 게임 화면을 한 번 클릭하면 조작 초점이 바로
-            돌아옵니다.
+            {playMode === 'mobile'
+              ? '모바일 버전에서는 화면 위 패드로 이동, 점프, 대시, 물총을 사용할 수 있습니다.'
+              : 'PC 버전에서는 게임 화면을 한 번 클릭하면 조작 초점이 바로 돌아옵니다.'}
           </p>
           <p>
             Supabase 연결 상태:{' '}
