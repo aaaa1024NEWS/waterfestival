@@ -1,5 +1,22 @@
 import gameBackgroundUrl from '../assets/game-background.png';
 
+const treasureAssetModules = import.meta.glob('../assets/treasures/*.{jpg,jpeg,png,webp}', {
+    eager: true,
+    import: 'default',
+    query: '?url'
+});
+
+const treasureAssets = Object.fromEntries(
+    Object.entries(treasureAssetModules).map(([path, url]) => [
+        decodeURIComponent(path.split('/').pop()),
+        url
+    ])
+);
+
+function treasureImage(filename) {
+    return treasureAssets[filename];
+}
+
 const STAGE_BADGES = {
     1: { label: 'STAGE 1 : 천관산 억새밭', color: '#f59e0b' },
     2: { label: 'STAGE 2 : 장흥 토요시장', color: '#fbbf24' },
@@ -30,6 +47,7 @@ export function createWaterFestivalGame({
 
     const notifyGameState = () => onGameStateChange(gameState);
     const notifyStage = () => onStageChange(getStageBadge(currentStage));
+        const treasureImageCache = new Map();
         const gameBackground = new Image();
         gameBackground.src = gameBackgroundUrl;
 
@@ -95,6 +113,18 @@ export function createWaterFestivalGame({
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
+        function getTreasureImage(src) {
+            if (!src) return null;
+            if (treasureImageCache.has(src)) {
+                return treasureImageCache.get(src);
+            }
+
+            const image = new Image();
+            image.src = src;
+            treasureImageCache.set(src, image);
+            return image;
+        }
+
         // 게임 상태 관리
         let gameState = 'START'; // START, PLAYING, TRANSITION, CLEAR
         let currentStage = 1; // 1, 2, 3
@@ -146,37 +176,37 @@ export function createWaterFestivalGame({
         // 9경9미9품 데이터 풀 (총 27개 수집품 분할 수집)
         const stageItemsPool = {
             1: [
-                { id: 1, name: '표고버섯(9품)', color: '#fbbf24', icon: '🍄' },
-                { id: 2, name: '청태전차(9품)', color: '#a3e635', icon: '🍵' },
-                { id: 3, name: '편백우드랜드(9경)', color: '#34d399', icon: '🌲' },
-                { id: 4, name: '천관산공원(9경)', color: '#f87171', icon: '⛰️' },
-                { id: 5, name: '제암산철쭉(9경)', color: '#f472b6', icon: '🌸' },
-                { id: 6, name: '보림사(9경)', color: '#fb923c', icon: '⛩️' },
-                { id: 7, name: '헛개나무(9품)', color: '#60a5fa', icon: '🌿' },
-                { id: 8, name: '황칠백숙(9미)', color: '#cbd5e1', icon: '🍲' },
-                { id: 9, name: '친환경유기쌀(9품)', color: '#fef08a', icon: '🌾' }
+                { id: 1, kind: '9품', name: '표고버섯', color: '#fbbf24', icon: '🍄', imageSrc: treasureImage('9품표고버섯.jpg') },
+                { id: 2, kind: '9품', name: '청태전', color: '#a3e635', icon: '🍵', imageSrc: treasureImage('9품청태전.jpg') },
+                { id: 3, kind: '9경', name: '우드랜드', color: '#34d399', icon: '🌲', imageSrc: treasureImage('9경우드랜드.jpg') },
+                { id: 4, kind: '9경', name: '천관산', color: '#f87171', icon: '⛰️', imageSrc: treasureImage('9경천관산.jpg') },
+                { id: 5, kind: '9경', name: '제암산', color: '#f472b6', icon: '🌸', imageSrc: treasureImage('9경제암산.jpg') },
+                { id: 6, kind: '9경', name: '보림사', color: '#fb923c', icon: '⛩️', imageSrc: treasureImage('9경 보림사.jpg') },
+                { id: 7, kind: '9품', name: '헛개나무', color: '#60a5fa', icon: '🌿', imageSrc: treasureImage('9품헛개나무.jpg') },
+                { id: 8, kind: '9미', name: '황칠백숙', color: '#cbd5e1', icon: '🍲', imageSrc: treasureImage('황칠백숙.png') },
+                { id: 9, kind: '9품', name: '아르미쌀', color: '#fef08a', icon: '🌾', imageSrc: treasureImage('9품아르미쌀.jpg') }
             ],
             2: [
-                { id: 10, name: '장흥한우(9품)', color: '#fca5a5', icon: '🐂' },
-                { id: 11, name: '장흥삼합(9미)', color: '#f87171', icon: '🥩' },
-                { id: 12, name: '키조개요리(9미)', color: '#93c5fd', icon: '🐚' },
-                { id: 13, name: '바지락회무침(9미)', color: '#f472b6', icon: '🥗' },
-                { id: 14, name: '석화굴구이(9미)', color: '#cbd5e1', icon: '🦪' },
-                { id: 15, name: '싱싱갑오징어(9미)', color: '#e2e8f0', icon: '🦑' },
-                { id: 16, name: '청정무산김(9품)', color: '#475569', icon: '🍙' },
-                { id: 17, name: '탐진강낙지(9품)', color: '#fda4af', icon: '🐙' },
-                { id: 18, name: '갯장어샤브(9미)', color: '#93c5fd', icon: '🐟' }
+                { id: 10, kind: '9품', name: '육포', color: '#fca5a5', icon: '🐂', imageSrc: treasureImage('9품육포.jpg') },
+                { id: 11, kind: '9미', name: '한우삼합', color: '#f87171', icon: '🥩', imageSrc: treasureImage('9미한우삼합.png') },
+                { id: 12, kind: '9미', name: '키조개요리', color: '#93c5fd', icon: '🐚', imageSrc: treasureImage('9미키조개요리.png') },
+                { id: 13, kind: '9미', name: '바지락회무침', color: '#f472b6', icon: '🥗', imageSrc: treasureImage('9미바지락회무침.png') },
+                { id: 14, kind: '9미', name: '석화', color: '#cbd5e1', icon: '🦪', imageSrc: treasureImage('9미석화.png') },
+                { id: 15, kind: '9미', name: '갑오징어회먹찜', color: '#e2e8f0', icon: '🦑', imageSrc: treasureImage('9미갑오징어회먹찜.png') },
+                { id: 16, kind: '9품', name: '장흥무산김', color: '#475569', icon: '🍙', imageSrc: treasureImage('9품장흥무산김.jpg') },
+                { id: 17, kind: '9품', name: '낙지', color: '#fda4af', icon: '🐙', imageSrc: treasureImage('9품낙지.jpg') },
+                { id: 18, kind: '9미', name: '갯장어샤브샤브', color: '#93c5fd', icon: '🐟', imageSrc: treasureImage('9미갯장어샤브샤브.png') }
             ],
             3: [
-                { id: 19, name: '탐진강물결(9경)', color: '#38bdf8', icon: '💧' },
-                { id: 20, name: '찰진매생이(9품)', color: '#4ade80', icon: '🌿' },
-                { id: 21, name: '명품매생이탕(9미)', color: '#15803d', icon: '🥣' },
-                { id: 22, name: '된장물회(9미)', color: '#fbbf24', icon: '🍜' },
-                { id: 23, name: '정남진전망대(9경)', color: '#f472b6', icon: '🗼' },
-                { id: 24, name: '바다소등섬(9경)', color: '#60a5fa', icon: '🏝️' },
-                { id: 25, name: '메밀꽃선학동(9경)', color: '#ffffff', icon: '🌼' },
-                { id: 26, name: '황칠공예품(9품)', color: '#b45309', icon: '🪵' },
-                { id: 27, name: '물축제마크(9경)', color: '#22d3ee', icon: '💎' }
+                { id: 19, kind: '9경', name: '탐진강', color: '#38bdf8', icon: '💧', imageSrc: treasureImage('9경탐진강.jpg') },
+                { id: 20, kind: '9품', name: '매생이', color: '#4ade80', icon: '🌿', imageSrc: treasureImage('9품매생이.jpg') },
+                { id: 21, kind: '9미', name: '매생이탕', color: '#15803d', icon: '🥣', imageSrc: treasureImage('9미매생이탕.png') },
+                { id: 22, kind: '9미', name: '된장물회', color: '#fbbf24', icon: '🍜', imageSrc: treasureImage('9미된장물회.png') },
+                { id: 23, kind: '9경', name: '전망대', color: '#f472b6', icon: '🗼', imageSrc: treasureImage('9경전망대.jpg') },
+                { id: 24, kind: '9경', name: '소등섬', color: '#60a5fa', icon: '🏝️', imageSrc: treasureImage('9경소등섬.jpg') },
+                { id: 25, kind: '9경', name: '선학동마을', color: '#ffffff', icon: '🌼', imageSrc: treasureImage('9경선학동마을.jpg') },
+                { id: 26, kind: '9품', name: '황칠나무', color: '#b45309', icon: '🪵', imageSrc: treasureImage('9품황칠나무.jpg') },
+                { id: 27, kind: '9경', name: '토요시장', color: '#22d3ee', icon: '💎', imageSrc: treasureImage('9경토요시장.jpg') }
             ]
         };
 
@@ -1085,23 +1115,36 @@ export function createWaterFestivalGame({
             activeItems.forEach(item => {
                 if (!item.collected) {
                     const bob = Math.sin(Date.now() / 180 + item.id) * 3;
+                    const treasureImage = getTreasureImage(item.imageSrc);
+                    const imageSize = 28;
                     
                     ctx.fillStyle = item.color + '33';
                     ctx.beginPath();
-                    ctx.arc(item.x, item.y + bob, item.r * 1.6, 0, Math.PI * 2);
+                    ctx.arc(item.x, item.y + bob, item.r * 1.9, 0, Math.PI * 2);
                     ctx.fill();
 
-                    ctx.fillStyle = item.color;
-                    ctx.beginPath();
-                    ctx.arc(item.x, item.y + bob, item.r, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+                    ctx.fillRect(item.x - imageSize / 2 - 3, item.y + bob - imageSize / 2 - 3, imageSize + 6, imageSize + 6);
+                    ctx.strokeStyle = item.color;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(item.x - imageSize / 2 - 3, item.y + bob - imageSize / 2 - 3, imageSize + 6, imageSize + 6);
 
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = '12px "Galmuri11"';
-                    ctx.fillText(item.icon, item.x - 6, item.y + bob + 4);
+                    if (treasureImage && treasureImage.complete && treasureImage.naturalWidth > 0) {
+                        ctx.drawImage(treasureImage, item.x - imageSize / 2, item.y + bob - imageSize / 2, imageSize, imageSize);
+                    } else {
+                        ctx.fillStyle = item.color;
+                        ctx.beginPath();
+                        ctx.arc(item.x, item.y + bob, item.r, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '12px "Galmuri11"';
+                        ctx.fillText(item.icon, item.x - 6, item.y + bob + 4);
+                    }
 
                     ctx.font = '8px "Galmuri11"';
-                    ctx.fillText(item.name, item.x, item.y - item.r - 6 + bob);
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.fillText(item.name, item.x, item.y - item.r - 10 + bob);
                 }
             });
 
@@ -1194,11 +1237,11 @@ export function createWaterFestivalGame({
                 ctx.font = '9px "Galmuri11"';
                 if (item.collected) {
                     ctx.fillStyle = '#10b981';
-                    ctx.fillText(`[완료] ${item.icon} ${item.name}`, 25, yPos);
+                    ctx.fillText(`[완료] ${item.kind} ${item.name}`, 25, yPos);
                     collectCount++;
                 } else {
                     ctx.fillStyle = '#64748b';
-                    ctx.fillText(`[미지] ❓ ${item.name}`, 25, yPos);
+                    ctx.fillText(`[미지] ${item.kind} ${item.name}`, 25, yPos);
                 }
             });
 
