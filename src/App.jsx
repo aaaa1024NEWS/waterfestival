@@ -85,6 +85,13 @@ function App() {
   );
 
   useEffect(() => {
+    const prefersMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
+    if (prefersMobile) {
+      setSelectedModeIndex(1);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!canvasRef.current) return undefined;
 
     const engine = createWaterFestivalGame({
@@ -102,9 +109,33 @@ function App() {
     };
   }, []);
 
-  const startGame = () => gameRef.current?.start();
+  const requestMobileLandscape = async () => {
+    if (playMode !== 'mobile') return;
+
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
+      }
+    } catch {
+      // Some mobile browsers only allow orientation changes without fullscreen or not at all.
+    }
+
+    try {
+      await window.screen?.orientation?.lock?.('landscape');
+    } catch {
+      // iOS Safari does not currently expose orientation lock to web apps.
+    }
+  };
+
+  const startGame = async () => {
+    await requestMobileLandscape();
+    gameRef.current?.start();
+  };
   const nextStage = () => gameRef.current?.nextStage();
-  const restartGame = () => gameRef.current?.restart();
+  const restartGame = async () => {
+    await requestMobileLandscape();
+    gameRef.current?.restart();
+  };
   const selectedMode = PLAY_MODES[selectedModeIndex];
   const chooseSelectedMode = () => setPlayMode(selectedMode.id);
   const selectPreviousMode = () =>
@@ -183,8 +214,17 @@ function App() {
     gameRef.current?.shootDown();
   };
 
+  const appClassName = [
+    'app-shell',
+    playMode === 'mobile' ? 'app-shell--mobile' : '',
+    gameState === 'PLAYING' ? 'app-shell--playing' : '',
+    !playMode ? 'app-shell--selecting' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <main className="app-shell">
+    <main className={appClassName}>
       <section className="game-shell" aria-label="정남진 장흥 물축제 홍보 게임">
         <header className="game-header">
           <div>

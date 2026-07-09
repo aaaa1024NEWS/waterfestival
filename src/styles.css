@@ -19,6 +19,10 @@ body,
   margin: 0;
 }
 
+html {
+  min-height: 100svh;
+}
+
 body {
   overflow-x: hidden;
   user-select: none;
@@ -77,6 +81,7 @@ button {
 
 .retro-logo {
   display: inline-block;
+  max-width: 100%;
   padding: 5px 9px 7px;
   background: #0f172a;
   border: 3px solid #f8fafc;
@@ -632,62 +637,234 @@ button {
   box-shadow: 0 0 0 3px #020617;
 }
 
+.app-shell--mobile.app-shell--playing {
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  overflow: hidden;
+  padding: 0;
+}
+
+.app-shell--mobile.app-shell--playing .game-shell {
+  width: 100vw;
+  max-width: none;
+}
+
+.app-shell--mobile.app-shell--playing .game-header,
+.app-shell--mobile.app-shell--playing .game-footer {
+  display: none;
+}
+
+.app-shell--mobile.app-shell--playing .canvas-frame {
+  width: 100vw;
+  height: 100svh;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  box-shadow: none;
+}
+
 @media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    min-height: 100svh;
+  }
+
+  body {
+    overflow-y: auto;
+  }
+
   .app-shell {
     align-items: start;
-    padding: 8px;
+    display: block;
+    min-height: 100svh;
+    padding: 6px;
   }
 
   .game-shell {
     width: 100%;
   }
 
-  .canvas-frame {
-    max-height: none;
-  }
-
   .game-header {
     align-items: flex-start;
     flex-direction: column;
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .header-kicker {
+    margin-bottom: 3px;
+    padding: 2px 5px;
+    font-size: 0.48rem;
+    box-shadow: 2px 2px 0 #2563eb;
+  }
+
+  .game-header h1 {
+    font-size: clamp(0.84rem, 5vw, 1.08rem);
+    line-height: 1.25;
+  }
+
+  .retro-logo {
+    padding: 4px 6px 6px;
+    border-width: 2px;
+    box-shadow:
+      0 0 0 2px #020617,
+      3px 3px 0 #2563eb,
+      6px 6px 0 #f59e0b;
+    text-shadow:
+      1px 0 #1d4ed8,
+      -1px 0 #f59e0b,
+      0 2px #020617;
+  }
+
+  .game-header p {
+    font-size: 0.62rem;
+    line-height: 1.35;
   }
 
   .stage-badge {
     width: 100%;
     min-width: 0;
+    padding: 7px 8px;
     text-align: left;
+    border-width: 2px;
+    box-shadow: 3px 3px 0 #020617;
+  }
+
+  .stage-badge span {
+    font-size: 0.58rem;
+  }
+
+  .stage-badge strong {
+    font-size: 0.68rem;
+  }
+
+  .canvas-frame {
+    aspect-ratio: auto;
+    height: min(70svh, 560px);
+    min-height: 390px;
+    max-height: none;
+    border-width: 3px;
+  }
+
+  .game-footer {
+    display: none;
   }
 
   .overlay {
-    gap: 10px;
+    justify-content: flex-start;
+    gap: 8px;
+    overflow-y: auto;
+    padding: 10px 8px 14px;
+  }
+
+  .overlay-title {
+    font-size: clamp(1rem, 5vw, 1.32rem);
+    line-height: 1.25;
+  }
+
+  .pixel-eyebrow {
+    padding: 3px 7px;
+    font-size: 0.5rem;
+  }
+
+  .overlay-copy {
+    width: 100%;
+    font-size: 0.66rem;
+    line-height: 1.5;
+  }
+
+  .overlay-copy.compact {
+    width: min(100%, 310px);
+    font-size: 0.64rem;
+  }
+
+  .overlay-kicker {
+    font-size: 0.66rem;
+    line-height: 1.35;
+  }
+
+  .overlay-start .overlay-copy:not(.compact) {
+    display: none;
   }
 
   .start-grid {
     grid-template-columns: 1fr;
-    padding: 12px;
+    gap: 8px;
+    width: min(100%, 330px);
+    max-height: 182px;
+    overflow-y: auto;
+    padding: 10px;
+    border-width: 2px;
+  }
+
+  .start-grid h2 {
+    margin-bottom: 5px;
+    font-size: 0.72rem;
+  }
+
+  .start-grid p {
+    margin: 3px 0;
+    font-size: 0.63rem;
+    line-height: 1.35;
   }
 
   .mode-carousel {
-    grid-template-columns: 46px minmax(0, 1fr) 46px;
-    gap: 8px;
-    width: min(100%, 360px);
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    gap: 7px;
+    width: min(100%, 330px);
   }
 
   .mode-arrow {
-    width: 44px;
-    height: 66px;
+    width: 40px;
+    height: 62px;
+    border-width: 2px;
+    box-shadow: 3px 3px 0 #1d4ed8;
+    font-size: 0.95rem;
   }
 
   .mode-card {
-    min-height: 118px;
-    padding: 14px 10px;
+    min-height: 108px;
+    gap: 6px;
+    padding: 12px 8px;
+    border-width: 3px;
+    box-shadow:
+      0 0 0 3px #020617,
+      5px 5px 0 #f59e0b;
   }
 
   .mode-card.selected {
-    min-height: 132px;
+    min-height: 118px;
+  }
+
+  .mode-icon {
+    width: 42px;
+    height: 42px;
+    border-width: 2px;
+    font-size: 1rem;
+  }
+
+  .mode-card strong {
+    font-size: 0.92rem;
+  }
+
+  .mode-card small,
+  .mode-hint {
+    font-size: 0.6rem;
+    line-height: 1.35;
   }
 
   .logo-title {
-    font-size: clamp(1rem, 6vw, 1.45rem);
+    width: min(100%, 330px);
+    padding: 8px 9px 10px;
+    border-width: 3px;
+    font-size: clamp(0.96rem, 5.6vw, 1.24rem);
+    box-shadow:
+      0 0 0 3px #020617,
+      5px 5px 0 #2563eb,
+      8px 8px 0 #f59e0b;
   }
 
   .primary-button,
@@ -695,8 +872,15 @@ button {
   .success-button,
   .ghost-button {
     min-height: 42px;
-    padding: 0 18px;
-    font-size: 0.78rem;
+    width: min(100%, 300px);
+    padding: 0 14px;
+    border-width: 2px;
+    font-size: 0.72rem;
+  }
+
+  .button-row {
+    width: min(100%, 330px);
+    gap: 8px;
   }
 
   .mobile-pad {

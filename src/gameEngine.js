@@ -1,4 +1,21 @@
-import gameBackgroundUrl from '../assets/game-background.png';
+const stageBackgroundAssetModules = import.meta.glob('../assets/backgrounds/*.{jpg,jpeg,png,webp}', {
+    eager: true,
+    import: 'default',
+    query: '?url'
+});
+
+const stageBackgroundAssets = Object.fromEntries(
+    Object.entries(stageBackgroundAssetModules).map(([path, url]) => [
+        decodeURIComponent(path.split('/').pop()),
+        url
+    ])
+);
+
+const STAGE_BACKGROUND_FILES = {
+    1: 'stage-1-background.png',
+    2: 'stage-2-background.jpg',
+    3: 'stage-3-background.jpg'
+};
 
 const treasureAssetModules = import.meta.glob('../assets/treasures/*.{jpg,jpeg,png,webp}', {
     eager: true,
@@ -15,6 +32,10 @@ const treasureAssets = Object.fromEntries(
 
 function treasureImage(filename) {
     return treasureAssets[filename];
+}
+
+function stageBackgroundImage(stage) {
+    return stageBackgroundAssets[STAGE_BACKGROUND_FILES[stage]] ?? stageBackgroundAssets['stage-1-background.png'];
 }
 
 const STAGE_BADGES = {
@@ -48,8 +69,7 @@ export function createWaterFestivalGame({
     const notifyGameState = () => onGameStateChange(gameState);
     const notifyStage = () => onStageChange(getStageBadge(currentStage));
         const treasureImageCache = new Map();
-        const gameBackground = new Image();
-        gameBackground.src = gameBackgroundUrl;
+        const stageBackgroundImageCache = new Map();
 
         const hollowPalette = {
             void: '#030712',
@@ -67,7 +87,7 @@ export function createWaterFestivalGame({
         };
 
         function drawCoverImage(image, dx, dy, dw, dh) {
-            if (!image.complete || image.naturalWidth === 0) return false;
+            if (!image || !image.complete || image.naturalWidth === 0) return false;
 
             const imageRatio = image.naturalWidth / image.naturalHeight;
             const targetRatio = dw / dh;
@@ -88,14 +108,29 @@ export function createWaterFestivalGame({
             return true;
         }
 
+        function getStageBackground(stage) {
+            const src = stageBackgroundImage(stage);
+            if (!src) return null;
+
+            if (stageBackgroundImageCache.has(src)) {
+                return stageBackgroundImageCache.get(src);
+            }
+
+            const image = new Image();
+            image.src = src;
+            stageBackgroundImageCache.set(src, image);
+            return image;
+        }
+
         function drawHollowScreenGrade() {
+            const backgroundImage = getStageBackground(currentStage);
             const topFog = ctx.createLinearGradient(0, 0, 0, canvas.height);
             topFog.addColorStop(0, 'rgba(5, 14, 30, 0.35)');
             topFog.addColorStop(0.55, 'rgba(2, 6, 23, 0.18)');
             topFog.addColorStop(1, 'rgba(0, 0, 0, 0.58)');
             ctx.fillStyle = topFog;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            drawCoverImage(gameBackground, 0, 0, canvas.width, canvas.height);
+            drawCoverImage(backgroundImage, 0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'rgba(4, 13, 28, 0.24)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
