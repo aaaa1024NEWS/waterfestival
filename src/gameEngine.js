@@ -19,6 +19,8 @@ const STAGE_BACKGROUND_FILES = {
     3: 'stage-3-background.jpg'
 };
 
+const USE_NATIVE_BACKGROUND_DECOR = false;
+
 const platformAssetModules = import.meta.glob('../assets/platforms/*.{jpg,jpeg,png,webp}', {
     eager: true,
     import: 'default',
@@ -301,28 +303,10 @@ export function createWaterFestivalGame({
 
         function drawHollowScreenGrade() {
             const backgroundImage = getStageBackground(currentStage);
-            const topFog = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            topFog.addColorStop(0, 'rgba(5, 14, 30, 0.35)');
-            topFog.addColorStop(0.55, 'rgba(2, 6, 23, 0.18)');
-            topFog.addColorStop(1, 'rgba(0, 0, 0, 0.58)');
-            ctx.fillStyle = topFog;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            drawCoverImage(backgroundImage, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(4, 13, 28, 0.24)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const glow = ctx.createRadialGradient(430, 260, 40, 430, 260, 420);
-            glow.addColorStop(0, hollowPalette.lamp);
-            glow.addColorStop(0.45, 'rgba(59, 130, 246, 0.08)');
-            glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = glow;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const vignette = ctx.createRadialGradient(400, 250, 180, 400, 250, 520);
-            vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-            vignette.addColorStop(1, 'rgba(0, 0, 0, 0.72)');
-            ctx.fillStyle = vignette;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (!drawCoverImage(backgroundImage, 0, 0, canvas.width, canvas.height)) {
+                ctx.fillStyle = hollowPalette.void;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
         }
 
         function getCachedImage(src) {
@@ -362,18 +346,6 @@ export function createWaterFestivalGame({
         }
 
         function drawStagePlatformDecor(p, decorImage) {
-            if (currentStage === 3) {
-                const dropCount = Math.min(6, Math.max(1, Math.floor(p.w / 70)));
-                ctx.fillStyle = 'rgba(125, 211, 252, 0.78)';
-                for (let i = 0; i < dropCount; i++) {
-                    const dx = p.x + ((i + 1) * p.w) / (dropCount + 1);
-                    const dy = p.y - 8 - Math.sin(Date.now() * 0.006 + i) * 2;
-                    ctx.fillRect(dx - 2, dy, 4, 7);
-                    ctx.fillRect(dx - 4, dy + 3, 8, 3);
-                }
-                return;
-            }
-
             if (!decorImage || !decorImage.complete || decorImage.naturalWidth === 0 || p.w < 62) return;
 
             if (currentStage === 1) {
@@ -429,9 +401,6 @@ export function createWaterFestivalGame({
             const drewObstacleImage = drawTiledCoverImage(obstacleImage, hz.x, visualY, hz.w, visualH, tileW);
 
             if (drewObstacleImage) {
-                ctx.strokeStyle = 'rgba(248, 250, 252, 0.6)';
-                ctx.lineWidth = 1.5;
-                ctx.strokeRect(hz.x, hz.y, hz.w, hz.h);
                 return;
             }
 
@@ -494,21 +463,28 @@ export function createWaterFestivalGame({
 
             const popupImage = getCachedImage(treasurePopup.imageSrc);
             const remaining = Math.max(0, Math.ceil((treasurePopup.endsAt - performance.now()) / 1000));
-            const panelW = Math.min(1460, canvas.width - 80);
-            const panelH = Math.min(Math.round(584 * 2.5), canvas.height - 40);
-            const uiScale = Math.min(panelW / 1460, panelH / 1040);
-            const fontFamily = '"Galmuri11", "DungGeunMo", "NeoDunggeunmo Pro", "Malgun Gothic", monospace';
+            const isMobilePopup = window.matchMedia?.('(max-width: 900px), (pointer: coarse)').matches ?? false;
+            const panelW = isMobilePopup ? Math.min(1320, canvas.width - 180) : Math.min(1460, canvas.width - 80);
+            const panelH = isMobilePopup ? Math.min(780, canvas.height - 140) : Math.min(1040, canvas.height - 40);
+            const baseW = isMobilePopup ? 1320 : 1460;
+            const baseH = isMobilePopup ? 780 : 1040;
+            const uiScale = Math.min(panelW / baseW, panelH / baseH);
+            const fontFamily = '"Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Galmuri11", sans-serif';
             const font = (size, weight = '') =>
                 `${weight ? `${weight} ` : ''}${Math.max(12, Math.round(size * uiScale))}px ${fontFamily}`;
-            const panelX = (canvas.width - panelW) / 2;
-            const panelY = (canvas.height - panelH) / 2;
-            const headerH = 70 * uiScale;
-            const imageBoxW = Math.min(500 * uiScale, panelW * 0.36);
-            const imageBoxH = Math.min(590 * uiScale, panelH - headerH - 245 * uiScale);
-            const imageX = panelX + 56 * uiScale;
-            const imageY = panelY + headerH + 64 * uiScale;
-            const textX = imageX + imageBoxW + 58 * uiScale;
-            const textW = panelX + panelW - textX - 58 * uiScale;
+            const panelX = Math.round((canvas.width - panelW) / 2);
+            const panelY = Math.round((canvas.height - panelH) / 2);
+            const headerH = Math.round((isMobilePopup ? 58 : 70) * uiScale);
+            const imageBoxW = Math.round(isMobilePopup ? Math.min(360 * uiScale, panelW * 0.3) : Math.min(500 * uiScale, panelW * 0.36));
+            const imageBoxH = Math.round(isMobilePopup ? Math.min(380 * uiScale, panelH - headerH - 210 * uiScale) : Math.min(590 * uiScale, panelH - headerH - 245 * uiScale));
+            const imageX = Math.round(panelX + (isMobilePopup ? 44 : 56) * uiScale);
+            const imageY = Math.round(panelY + headerH + (isMobilePopup ? 46 : 64) * uiScale);
+            const textX = Math.round(imageX + imageBoxW + (isMobilePopup ? 44 : 58) * uiScale);
+            const textW = Math.round(panelX + panelW - textX - (isMobilePopup ? 44 : 58) * uiScale);
+            const titleY = imageY + (isMobilePopup ? 104 : 128) * uiScale;
+            const descriptionY = imageY + (isMobilePopup ? 148 : 178) * uiScale;
+            const descriptionLineHeight = (isMobilePopup ? 34 : 40) * uiScale;
+            const descriptionMaxLines = isMobilePopup ? 7 : 11;
 
             ctx.save();
             ctx.fillStyle = 'rgba(0, 0, 0, 0.68)';
@@ -533,10 +509,10 @@ export function createWaterFestivalGame({
             ctx.fillStyle = '#6b2b16';
             ctx.fillRect(panelX, panelY, panelW, headerH);
             ctx.fillStyle = '#f0abfc';
-            ctx.font = font(26, 'bold');
+            ctx.font = font(isMobilePopup ? 23 : 26, 'bold');
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
-            ctx.fillText('영웅의 비밀(전설)', panelX + 28 * uiScale, panelY + 45 * uiScale);
+            ctx.fillText('장흥 보물 획득', Math.round(panelX + 28 * uiScale), Math.round(panelY + (isMobilePopup ? 38 : 45) * uiScale));
 
             ctx.fillStyle = '#050204';
             ctx.fillRect(imageX - 12 * uiScale, imageY - 12 * uiScale, imageBoxW + 24 * uiScale, imageBoxH + 24 * uiScale);
@@ -556,36 +532,36 @@ export function createWaterFestivalGame({
 
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ef4444';
-            ctx.font = font(24, 'bold');
-            ctx.fillText('가치를 추가', textX, imageY + 28 * uiScale);
-            ctx.fillText('획득 중', textX, imageY + 62 * uiScale);
+            ctx.font = font(isMobilePopup ? 21 : 24, 'bold');
+            ctx.fillText('획득 완료', textX, Math.round(imageY + (isMobilePopup ? 22 : 28) * uiScale));
+            ctx.fillText('보물 정보', textX, Math.round(imageY + (isMobilePopup ? 52 : 62) * uiScale));
 
             ctx.fillStyle = '#facc15';
-            ctx.font = font(38, 'bold');
-            ctx.fillText(`[${treasurePopup.item.kind}] ${treasurePopup.title}`, textX, imageY + 128 * uiScale);
+            ctx.font = font(isMobilePopup ? 32 : 38, 'bold');
+            ctx.fillText(`[${treasurePopup.item.kind}] ${treasurePopup.title}`, textX, Math.round(titleY));
 
             ctx.fillStyle = '#f8fafc';
-            ctx.font = font(25);
-            drawWrappedText(treasurePopup.description, textX, imageY + 178 * uiScale, textW, 40 * uiScale, 11);
+            ctx.font = font(isMobilePopup ? 22 : 25);
+            drawWrappedText(treasurePopup.description, textX, Math.round(descriptionY), textW, descriptionLineHeight, descriptionMaxLines);
 
-            const infoY = panelY + panelH - 170 * uiScale;
+            const infoY = panelY + panelH - (isMobilePopup ? 124 : 170) * uiScale;
             ctx.fillStyle = 'rgba(38, 18, 8, 0.9)';
-            ctx.fillRect(panelX + 36 * uiScale, infoY - 42 * uiScale, panelW - 72 * uiScale, 112 * uiScale);
+            ctx.fillRect(Math.round(panelX + 36 * uiScale), Math.round(infoY - 42 * uiScale), Math.round(panelW - 72 * uiScale), Math.round(112 * uiScale));
             ctx.strokeStyle = '#4a2511';
             ctx.lineWidth = 3 * uiScale;
-            ctx.strokeRect(panelX + 36 * uiScale, infoY - 42 * uiScale, panelW - 72 * uiScale, 112 * uiScale);
+            ctx.strokeRect(Math.round(panelX + 36 * uiScale), Math.round(infoY - 42 * uiScale), Math.round(panelW - 72 * uiScale), Math.round(112 * uiScale));
 
             ctx.fillStyle = '#facc15';
-            ctx.font = font(25, 'bold');
-            ctx.fillText('[사용처]', panelX + 62 * uiScale, infoY);
+            ctx.font = font(isMobilePopup ? 22 : 25, 'bold');
+            ctx.fillText('[사용처]', Math.round(panelX + 62 * uiScale), Math.round(infoY));
             ctx.fillStyle = '#f8fafc';
-            ctx.font = font(22);
-            ctx.fillText(`${treasurePopup.item.kind} 도감에 사용 가능`, panelX + 62 * uiScale, infoY + 42 * uiScale);
+            ctx.font = font(isMobilePopup ? 19 : 22);
+            ctx.fillText(`${treasurePopup.item.kind} 도감에 기록됩니다`, Math.round(panelX + 62 * uiScale), Math.round(infoY + 42 * uiScale));
 
             ctx.textAlign = 'right';
             ctx.fillStyle = '#fb923c';
-            ctx.font = font(24, 'bold');
-            ctx.fillText(`재개까지 ${remaining}초`, panelX + panelW - 42 * uiScale, panelY + panelH - 38 * uiScale);
+            ctx.font = font(isMobilePopup ? 21 : 24, 'bold');
+            ctx.fillText(`재개까지 ${remaining}초`, Math.round(panelX + panelW - 42 * uiScale), Math.round(panelY + panelH - 38 * uiScale));
             ctx.restore();
         }
 
@@ -1243,65 +1219,67 @@ export function createWaterFestivalGame({
                 }
             }
 
-            // 구름 안개 이동
-            cloudLayers.forEach(cloud => {
-                cloud.x -= cloud.speed;
-                if (cloud.x < -cloud.w) {
-                    cloud.x = levelWidth + 20;
-                }
-            });
-
-            // 3단계 물축제 대형 분수 애니메이션 연산
-            if (currentStage === 3) {
-                festivalWaterSprites.forEach(sprite => {
-                    sprite.currentH += sprite.speed * sprite.dir;
-                    if (sprite.currentH > sprite.height) {
-                        sprite.dir = -1;
-                        // 물줄기 끝에서 물방울 사방 방출
-                        for (let i = 0; i < 2; i++) {
-                            particles.push({
-                                x: sprite.x,
-                                y: sprite.baseY - sprite.currentH,
-                                vx: (Math.random() - 0.5) * 4,
-                                vy: (Math.random() - 0.5) * -2,
-                                color: '#38bdf8',
-                                size: 1.5 + Math.random() * 2,
-                                decay: 0.03,
-                                life: 1
-                            });
-                        }
-                    } else if (sprite.currentH < 0) {
-                        sprite.dir = 1;
+            if (USE_NATIVE_BACKGROUND_DECOR) {
+                // 구름 안개 이동
+                cloudLayers.forEach(cloud => {
+                    cloud.x -= cloud.speed;
+                    if (cloud.x < -cloud.w) {
+                        cloud.x = levelWidth + 20;
                     }
                 });
 
-                // 상시 떠오르는 하얗고 파란 물방울 이펙트
-                if (Math.random() < 0.25) {
+                // 3단계 물축제 대형 분수 애니메이션 연산
+                if (currentStage === 3) {
+                    festivalWaterSprites.forEach(sprite => {
+                        sprite.currentH += sprite.speed * sprite.dir;
+                        if (sprite.currentH > sprite.height) {
+                            sprite.dir = -1;
+                            // 물줄기 끝에서 물방울 사방 방출
+                            for (let i = 0; i < 2; i++) {
+                                particles.push({
+                                    x: sprite.x,
+                                    y: sprite.baseY - sprite.currentH,
+                                    vx: (Math.random() - 0.5) * 4,
+                                    vy: (Math.random() - 0.5) * -2,
+                                    color: '#38bdf8',
+                                    size: 1.5 + Math.random() * 2,
+                                    decay: 0.03,
+                                    life: 1
+                                });
+                            }
+                        } else if (sprite.currentH < 0) {
+                            sprite.dir = 1;
+                        }
+                    });
+
+                    // 상시 떠오르는 하얗고 파란 물방울 이펙트
+                    if (Math.random() < 0.25) {
+                        particles.push({
+                            x: camera.x + Math.random() * (canvas.width / zoom),
+                            y: 1000,
+                            vx: (Math.random() - 0.5) * 1.5,
+                            vy: -2 - Math.random() * 3,
+                            color: Math.random() > 0.4 ? '#60a5fa' : '#38bdf8',
+                            size: 2 + Math.random() * 2.5,
+                            decay: 0.01,
+                            life: 1
+                        });
+                    }
+                }
+
+                // 1단계 천관산 전용 바람에 날리는 억새꽃 씨앗 방출
+                if (currentStage === 1 && Math.random() < 0.12) {
                     particles.push({
-                        x: camera.x + Math.random() * (canvas.width / zoom),
-                        y: 1000,
-                        vx: (Math.random() - 0.5) * 1.5,
-                        vy: -2 - Math.random() * 3,
-                        color: Math.random() > 0.4 ? '#60a5fa' : '#38bdf8',
-                        size: 2 + Math.random() * 2.5,
-                        decay: 0.01,
+                        x: camera.x + Math.random() * (canvas.width / zoom) + 100,
+                        y: camera.y + Math.random() * 250,
+                        vx: -1.2 - Math.random() * 1.5,
+                        vy: 0.4 + Math.random() * 0.6,
+                        color: Math.random() > 0.3 ? '#f3f4f6' : '#d97706', // 흰색 및 갈색 억새꽃 가루
+                        size: 1.2 + Math.random() * 1.8,
+                        decay: 0.004,
                         life: 1
                     });
                 }
-            }
-
-            // 1단계 천관산 전용 바람에 날리는 억새꽃 씨앗 방출
-            if (currentStage === 1 && Math.random() < 0.12) {
-                particles.push({
-                    x: camera.x + Math.random() * (canvas.width / zoom) + 100,
-                    y: camera.y + Math.random() * 250,
-                    vx: -1.2 - Math.random() * 1.5,
-                    vy: 0.4 + Math.random() * 0.6,
-                    color: Math.random() > 0.3 ? '#f3f4f6' : '#d97706', // 흰색 및 갈색 억새꽃 가루
-                    size: 1.2 + Math.random() * 1.8,
-                    decay: 0.004,
-                    life: 1
-                });
             }
 
             // 카메라 선형 보간 위치 정렬
@@ -1322,38 +1300,31 @@ export function createWaterFestivalGame({
 
         // 전체 렌더링
         function draw() {
-            // [배경 드로잉] 스테이지별 맞춤형 테마 컬러 스페이스
-            if (currentStage === 1) {
-                // 천관산 가을 억새밭 밤하늘 (고동색, 밤하늘 청록의 조화)
-                ctx.fillStyle = '#0f0b08';
-            } else if (currentStage === 2) {
-                // 장흥 토요시장 저녁 장터 (깊어가는 황금빛 오렌지/다크 그레이 밤하늘)
-                ctx.fillStyle = '#0c0a09';
-            } else {
-                // 시원한 물빛 가득 물축제장 밤하늘 (깊은 물빛 어스름)
-                ctx.fillStyle = '#040d1a';
-            }
+            // 스테이지 배경 이미지를 가장 먼저, 가리지 않고 그립니다.
+            ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             drawHollowScreenGrade();
 
             // 밤하늘 총총히 빛나는 달빛 별들
-            starLayers.forEach(star => {
-                star.alpha += star.blinkSpeed;
-                if (star.alpha > 1 || star.alpha < 0.2) {
-                    star.blinkSpeed = -star.blinkSpeed;
-                }
-                ctx.fillStyle = star.color;
-                ctx.globalAlpha = star.alpha;
-                ctx.fillRect(star.x, star.y, star.size, star.size);
-                ctx.globalAlpha = 1.0;
-            });
+            if (USE_NATIVE_BACKGROUND_DECOR) {
+                starLayers.forEach(star => {
+                    star.alpha += star.blinkSpeed;
+                    if (star.alpha > 1 || star.alpha < 0.2) {
+                        star.blinkSpeed = -star.blinkSpeed;
+                    }
+                    ctx.fillStyle = star.color;
+                    ctx.globalAlpha = star.alpha;
+                    ctx.fillRect(star.x, star.y, star.size, star.size);
+                    ctx.globalAlpha = 1.0;
+                });
+            }
 
             ctx.save();
             ctx.scale(zoom, zoom);
             ctx.translate(-camera.x, -camera.y);
 
             // [스테이지 2 전용 전통시장 가옥 배경 드로잉]
-            if (currentStage === 2) {
+            if (USE_NATIVE_BACKGROUND_DECOR && currentStage === 2) {
                 marketDecorations.forEach(deco => {
                     const px = deco.x - camera.x * 0.18;
                     // 은은한 전통 한옥 가옥 그림자
@@ -1375,7 +1346,7 @@ export function createWaterFestivalGame({
             }
 
             // [스테이지 3 전용 청량한 분수 물줄기 드로잉]
-            if (currentStage === 3) {
+            if (USE_NATIVE_BACKGROUND_DECOR && currentStage === 3) {
                 festivalWaterSprites.forEach(sprite => {
                     const px = sprite.x - camera.x * 0.15;
                     
@@ -1401,10 +1372,11 @@ export function createWaterFestivalGame({
                 });
             }
 
-            // [32비트 다층 산맥 배경 드로잉]
-            ctx.save();
-            ctx.globalAlpha = 0.34;
-            mountainLayers.forEach(bg => {
+            if (USE_NATIVE_BACKGROUND_DECOR) {
+                // [32비트 다층 산맥 배경 드로잉]
+                ctx.save();
+                ctx.globalAlpha = 0.34;
+                mountainLayers.forEach(bg => {
                 const px = bg.x - camera.x * bg.speedMult;
                 const py = bg.baseY - camera.y * bg.speedMult;
 
@@ -1445,18 +1417,18 @@ export function createWaterFestivalGame({
                     ctx.fillStyle = currentStage === 1 ? '#5c3d24' : (currentStage === 2 ? '#1c1917' : '#0369a1');
                     ctx.fillRect(px + bg.w/3, py - 8, 2.5, 8);
                 }
-            });
-            ctx.restore();
+                });
+                ctx.restore();
 
-            // 배경 구름
-            cloudLayers.forEach(cloud => {
-                ctx.fillStyle = currentStage === 1 ? 'rgba(217, 119, 6, 0.04)' : (currentStage === 2 ? 'rgba(234, 179, 8, 0.03)' : 'rgba(255, 255, 255, 0.06)');
-                ctx.fillRect(cloud.x, cloud.y, cloud.w, cloud.h);
-                ctx.fillRect(cloud.x + 10, cloud.y - 4, cloud.w - 20, cloud.h + 8);
-            });
+                // 배경 구름
+                cloudLayers.forEach(cloud => {
+                    ctx.fillStyle = currentStage === 1 ? 'rgba(217, 119, 6, 0.04)' : (currentStage === 2 ? 'rgba(234, 179, 8, 0.03)' : 'rgba(255, 255, 255, 0.06)');
+                    ctx.fillRect(cloud.x, cloud.y, cloud.w, cloud.h);
+                    ctx.fillRect(cloud.x + 10, cloud.y - 4, cloud.w - 20, cloud.h + 8);
+                });
+            }
 
             // [64비트 지형 테마 렌더링 - 맵의 발판 풀 꽃 연출]
-            const windTime = Date.now() * 0.0025;
             const stagePlatformImages = getStagePlatformImages();
             platforms.forEach(p => {
                 if (p.type === 'ground' || p.type === 'rock') {
@@ -1466,78 +1438,12 @@ export function createWaterFestivalGame({
                     if (!drewPlatformImage) {
                         ctx.fillStyle = hollowPalette.platform;
                         ctx.fillRect(p.x, p.y, p.w, p.h);
-                    }
-
-                    ctx.strokeStyle = hollowPalette.outline;
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(p.x, p.y, p.w, p.h);
-                    ctx.strokeStyle = 'rgba(125, 211, 252, 0.22)';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(p.x + 3, p.y + 3, Math.max(0, p.w - 6), Math.max(0, p.h - 6));
-
-                    // 발판 탑 레이어 (Grass/Soil Line)
-                    if (currentStage === 1) {
-                        // 가을 갈색빛 대지 라인
-                        ctx.fillStyle = hollowPalette.platformEdge; 
-                        ctx.fillRect(p.x, p.y, p.w, 6);
-                        ctx.fillStyle = 'rgba(125, 211, 252, 0.28)'; 
-                        ctx.fillRect(p.x, p.y + 6, p.w, 3);
-                    } else if (currentStage === 2) {
-                        // 황토빛 및 장터 마루목 라인
-                        ctx.fillStyle = hollowPalette.platformEdge; 
-                        ctx.fillRect(p.x, p.y, p.w, 5);
-                        ctx.fillStyle = 'rgba(125, 211, 252, 0.28)'; 
-                        ctx.fillRect(p.x, p.y + 5, p.w, 3);
-                    } else {
-                        // 물빛 네온 워터 라인
-                        ctx.fillStyle = hollowPalette.platformEdge; 
-                        ctx.fillRect(p.x, p.y, p.w, 5);
-                        ctx.fillStyle = 'rgba(125, 211, 252, 0.28)'; 
-                        ctx.fillRect(p.x, p.y + 5, p.w, 3);
+                        ctx.strokeStyle = hollowPalette.outline;
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(p.x, p.y, p.w, p.h);
                     }
 
                     drawStagePlatformDecor(p, stagePlatformImages.decor);
-
-                    // 64비트풍 도트 장식 피어내기
-                    ctx.save();
-                    for (let gx = p.x + 4; gx < p.x + p.w - 4; gx += 12) {
-                        const sway = Math.sin(gx * 0.05 + windTime) * 3;
-                        
-                        if (currentStage === 1) {
-                            // 1단계: 바람에 하얗게 흩날리는 은빛 억새풀 (흰색/고동색 억새대)
-                            ctx.strokeStyle = '#f3f4f6'; // 하얀 억새꽃 이삭
-                            ctx.lineWidth = 1.5;
-                            ctx.beginPath();
-                            ctx.moveTo(gx, p.y);
-                            ctx.lineTo(gx + sway, p.y - 8);
-                            ctx.stroke();
-
-                            // 억새 줄기 대
-                            ctx.strokeStyle = '#b45309'; 
-                            ctx.lineWidth = 1;
-                            ctx.beginPath();
-                            ctx.moveTo(gx, p.y);
-                            ctx.lineTo(gx + sway * 0.5, p.y - 5);
-                            ctx.stroke();
-                        } else if (currentStage === 2) {
-                            // 2단계: 시장 등불 및 수풀 무늬
-                            ctx.strokeStyle = '#f59e0b';
-                            ctx.lineWidth = 1.5;
-                            ctx.beginPath();
-                            ctx.moveTo(gx, p.y);
-                            ctx.lineTo(gx + sway * 0.4, p.y - 4);
-                            ctx.stroke();
-                        } else {
-                            // 3단계: 물방울이 톡톡 터지는 물빛 새싹풀
-                            ctx.strokeStyle = '#60a5fa';
-                            ctx.lineWidth = 2;
-                            ctx.beginPath();
-                            ctx.moveTo(gx, p.y);
-                            ctx.lineTo(gx + sway * 0.6, p.y - 6);
-                            ctx.stroke();
-                        }
-                    }
-                    ctx.restore();
 
                 } else if (p.type === 'waterfall_wall') {
                     // 벽타기 특화 수직 벽면
@@ -1552,16 +1458,6 @@ export function createWaterFestivalGame({
                         }
                         ctx.fillRect(p.x, p.y, p.w, p.h);
                     }
-                    
-                    const cascade = (Date.now() / 8) % 30;
-                    ctx.strokeStyle = currentStage === 3 ? '#38bdf8' : '#78350f';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    for (let lx = p.x + 4; lx < p.x + p.w; lx += 8) {
-                        ctx.moveTo(lx, p.y);
-                        ctx.lineTo(lx, p.y + p.h);
-                    }
-                    ctx.stroke();
                 }
             });
 
