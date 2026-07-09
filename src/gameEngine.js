@@ -1,3 +1,5 @@
+import treasurePopupManifest from '../assets/treasure-popups/manifest.json';
+
 const stageBackgroundAssetModules = import.meta.glob('../assets/backgrounds/*.{jpg,jpeg,png,webp}', {
     eager: true,
     import: 'default',
@@ -113,11 +115,23 @@ const TREASURE_POPUP_ALIASES = {
 };
 
 function normalizeTreasureName(name) {
-    return name.replace(/\s|-/g, '');
+    return name.replace(/\s|-|_/g, '');
 }
 
+function stripImageExtension(filename) {
+    return filename.replace(/\.(png|jpe?g|webp)$/i, '');
+}
+
+function getPopupFileStem(filename) {
+    return stripImageExtension(filename).replace(/^popup-?/i, '');
+}
+
+const treasurePopupEntries = treasurePopupManifest;
 const treasurePopupInfoByName = new Map(
-    TREASURE_POPUP_MANIFEST.map((entry) => [normalizeTreasureName(entry.title), entry])
+    treasurePopupEntries.flatMap((entry) => {
+        const names = [entry.title, getPopupFileStem(entry.file)];
+        return names.map((name) => [normalizeTreasureName(name), entry]);
+    })
 );
 
 function treasureImage(filename) {
@@ -136,9 +150,37 @@ function treasurePopupImage(filename) {
     return treasurePopupAssets[filename];
 }
 
+function findTreasurePopupImageByTitle(title) {
+    const normalizedTitle = normalizeTreasureName(title);
+    const matchedFilename = Object.keys(treasurePopupAssets).find((filename) => {
+        return normalizeTreasureName(getPopupFileStem(filename)) === normalizedTitle;
+    });
+
+    return matchedFilename ? treasurePopupAssets[matchedFilename] : undefined;
+}
+
+function treasurePopupImageForInfo(info) {
+    if (!info) return undefined;
+    return treasurePopupImage(info.file) ?? findTreasurePopupImageByTitle(info.title);
+}
+
 function getTreasurePopupInfo(name) {
-    const alias = TREASURE_POPUP_ALIASES[name] ?? name;
-    return treasurePopupInfoByName.get(normalizeTreasureName(alias));
+    const candidates = [
+        name,
+        TREASURE_POPUP_ALIASES[name],
+        name.replace(/요리$/, '')
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        const matched = treasurePopupInfoByName.get(normalizeTreasureName(candidate));
+        if (matched) return matched;
+    }
+
+    const normalized = normalizeTreasureName(name);
+    return treasurePopupEntries.find((entry) => {
+        const entryName = normalizeTreasureName(entry.title);
+        return normalized.includes(entryName) || entryName.includes(normalized);
+    });
 }
 
 const STAGE_BADGES = {
@@ -212,6 +254,37 @@ export function createWaterFestivalGame({
             return true;
         }
 
+        function drawContainImage(image, dx, dy, dw, dh) {
+            if (!image || !image.complete || image.naturalWidth === 0) return false;
+
+            const imageRatio = image.naturalWidth / image.naturalHeight;
+            const targetRatio = dw / dh;
+            let renderW = dw;
+            let renderH = dh;
+
+            if (imageRatio > targetRatio) {
+                renderH = dw / imageRatio;
+            } else {
+                renderW = dh * imageRatio;
+            }
+
+            const renderX = dx + (dw - renderW) / 2;
+            const renderY = dy + (dh - renderH) / 2;
+            ctx.drawImage(image, renderX, renderY, renderW, renderH);
+            return true;
+        }
+
+        function drawTiledCoverImage(image, dx, dy, dw, dh, tileW = 180) {
+            if (!image || !image.complete || image.naturalWidth === 0) return false;
+
+            for (let x = dx; x < dx + dw - 0.5; x += tileW) {
+                const w = Math.min(tileW, dx + dw - x);
+                drawCoverImage(image, x, dy, w, dh);
+            }
+
+            return true;
+        }
+
         function getStageBackground(stage) {
             const src = stageBackgroundImage(stage);
             if (!src) return null;
@@ -278,15 +351,114 @@ export function createWaterFestivalGame({
             };
         }
 
+        function preloadConfiguredImages() {
+            Object.values(STAGE_PLATFORM_FILES).forEach(files => {
+                Object.values(files).forEach(filename => getCachedImage(platformAsset(filename)));
+            });
+
+            treasurePopupEntries.forEach(entry => {
+                getCachedImage(treasurePopupImageForInfo(entry));
+            });
+        }
+
+        function drawStagePlatformDecor(p, decorImage) {
+            if (currentStage === 3) {
+                const dropCount = Math.min(6, Math.max(1, Math.floor(p.w / 70)));
+                ctx.fillStyle = 'rgba(125, 211, 252, 0.78)';
+                for (let i = 0; i < dropCount; i++) {
+                    const dx = p.x + ((i + 1) * p.w) / (dropCount + 1);
+                    const dy = p.y - 8 - Math.sin(Date.now() * 0.006 + i) * 2;
+                    ctx.fillRect(dx - 2, dy, 4, 7);
+                    ctx.fillRect(dx - 4, dy + 3, 8, 3);
+                }
+                return;
+            }
+
+            if (!decorImage || !decorImage.complete || decorImage.naturalWidth === 0 || p.w < 62) return;
+
+            if (currentStage === 1) {
+                const decorH = Math.min(22, Math.max(12, p.h * 0.28));
+                const decorW = decorH * (decorImage.naturalWidth / decorImage.naturalHeight);
+                const gap = Math.max(18, decorW * 0.42);
+
+                ctx.save();
+                ctx.globalAlpha = 0.95;
+                for (let x = p.x - decorW * 0.2; x < p.x + p.w - decorW * 0.35; x += gap) {
+                    const sway = Math.sin((x + Date.now() * 0.08) * 0.04) * 2;
+                    drawContainImage(decorImage, x + sway, p.y - decorH + 5, decorW, decorH);
+                }
+                ctx.restore();
+                return;
+            }
+
+            if (currentStage === 2) {
+                const cols = 4;
+                const rows = 4;
+                const cellW = decorImage.naturalWidth / cols;
+                const cellH = decorImage.naturalHeight / rows;
+                const propCount = Math.min(4, Math.max(1, Math.floor(p.w / 115)));
+                const baseIndex = Math.abs(Math.floor(p.x / 37) + Math.floor(p.y / 19));
+
+                ctx.save();
+                ctx.globalAlpha = 0.88;
+                for (let i = 0; i < propCount; i++) {
+                    const spriteIndex = (baseIndex + i * 5) % (cols * rows);
+                    const col = spriteIndex % cols;
+                    const row = Math.floor(spriteIndex / cols);
+                    const sx = col * cellW + 16;
+                    const sy = row * cellH + 10;
+                    const sw = cellW - 32;
+                    const sh = cellH * 0.68;
+                    const drawW = Math.min(62, Math.max(38, p.w / (propCount + 1) * 0.58));
+                    const drawH = drawW * (sh / sw);
+                    const dx = p.x + ((i + 1) * p.w) / (propCount + 1) - drawW / 2;
+                    const dy = p.y - drawH + 7;
+
+                    ctx.drawImage(decorImage, sx, sy, sw, sh, dx, dy, drawW, drawH);
+                }
+                ctx.restore();
+                return;
+            }
+        }
+
+        function drawStageHazard(hz, obstacleImage) {
+            const pulse = Math.sin(Date.now() / 80) * 4;
+            const visualH = Math.min(170, Math.max(76, hz.h + 62));
+            const visualY = hz.y + hz.h - visualH - pulse;
+            const tileW = Math.max(132, visualH * 1.8);
+            const drewObstacleImage = drawTiledCoverImage(obstacleImage, hz.x, visualY, hz.w, visualH, tileW);
+
+            if (drewObstacleImage) {
+                ctx.strokeStyle = 'rgba(248, 250, 252, 0.6)';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(hz.x, hz.y, hz.w, hz.h);
+                return;
+            }
+
+            ctx.fillStyle = currentStage === 1 ? '#78350f' : (currentStage === 2 ? '#451a03' : '#1d4ed8');
+            ctx.fillRect(hz.x, hz.y - pulse, hz.w, hz.h + pulse);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let i = hz.x; i <= hz.x + hz.w; i += 8) {
+                ctx.lineTo(i, hz.y - pulse);
+                ctx.lineTo(i + 4, hz.y - 9 - pulse);
+                ctx.lineTo(i + 8, hz.y - pulse);
+            }
+            ctx.stroke();
+        }
+
         function showTreasurePopup(item) {
             const popupInfo = getTreasurePopupInfo(item.name);
-            const imageSrc = popupInfo ? treasurePopupImage(popupInfo.file) : item.imageSrc;
+            const imageSrc = treasurePopupImageForInfo(popupInfo) ?? item.imageSrc;
+            const popupImageSrc = imageSrc ?? item.imageSrc;
+            getCachedImage(popupImageSrc);
 
             treasurePopup = {
                 item,
-                title: item.name,
+                title: popupInfo?.title ?? item.name,
                 description: popupInfo?.description ?? `${item.kind} ${item.name} 보물을 획득했습니다.`,
-                imageSrc: imageSrc ?? item.imageSrc,
+                imageSrc: popupImageSrc,
                 startedAt: performance.now(),
                 endsAt: performance.now() + 3000
             };
@@ -322,77 +494,102 @@ export function createWaterFestivalGame({
 
             const popupImage = getCachedImage(treasurePopup.imageSrc);
             const remaining = Math.max(0, Math.ceil((treasurePopup.endsAt - performance.now()) / 1000));
-            const panelW = Math.min(650, canvas.width - 80);
-            const panelH = 292;
+            const panelW = Math.min(1460, canvas.width - 80);
+            const panelH = Math.min(Math.round(584 * 2.5), canvas.height - 40);
+            const uiScale = Math.min(panelW / 1460, panelH / 1040);
+            const fontFamily = '"Galmuri11", "DungGeunMo", "NeoDunggeunmo Pro", "Malgun Gothic", monospace';
+            const font = (size, weight = '') =>
+                `${weight ? `${weight} ` : ''}${Math.max(12, Math.round(size * uiScale))}px ${fontFamily}`;
             const panelX = (canvas.width - panelW) / 2;
-            const panelY = Math.max(42, canvas.height * 0.18);
-            const imageSize = 96;
-            const imageX = panelX + 26;
-            const imageY = panelY + 54;
-            const textX = imageX + imageSize + 24;
-            const textW = panelW - imageSize - 76;
+            const panelY = (canvas.height - panelH) / 2;
+            const headerH = 70 * uiScale;
+            const imageBoxW = Math.min(500 * uiScale, panelW * 0.36);
+            const imageBoxH = Math.min(590 * uiScale, panelH - headerH - 245 * uiScale);
+            const imageX = panelX + 56 * uiScale;
+            const imageY = panelY + headerH + 64 * uiScale;
+            const textX = imageX + imageBoxW + 58 * uiScale;
+            const textW = panelX + panelW - textX - 58 * uiScale;
 
             ctx.save();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.68)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = '#170b05';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 12 * uiScale;
+            ctx.shadowOffsetY = 12 * uiScale;
+            ctx.fillStyle = '#140904';
             ctx.fillRect(panelX, panelY, panelW, panelH);
-            ctx.strokeStyle = '#7c2d12';
-            ctx.lineWidth = 4;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            ctx.strokeStyle = '#8b3a14';
+            ctx.lineWidth = 7 * uiScale;
             ctx.strokeRect(panelX, panelY, panelW, panelH);
+            ctx.strokeStyle = '#241007';
+            ctx.lineWidth = 3 * uiScale;
+            ctx.strokeRect(panelX + 13 * uiScale, panelY + 13 * uiScale, panelW - 26 * uiScale, panelH - 26 * uiScale);
 
             ctx.fillStyle = '#6b2b16';
-            ctx.fillRect(panelX, panelY, panelW, 26);
+            ctx.fillRect(panelX, panelY, panelW, headerH);
             ctx.fillStyle = '#f0abfc';
-            ctx.font = 'bold 14px "Galmuri11"';
+            ctx.font = font(26, 'bold');
             ctx.textAlign = 'left';
-            ctx.fillText('영웅의 비밀(전설)', panelX + 14, panelY + 18);
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText('영웅의 비밀(전설)', panelX + 28 * uiScale, panelY + 45 * uiScale);
 
             ctx.fillStyle = '#050204';
-            ctx.fillRect(imageX - 8, imageY - 8, imageSize + 16, imageSize + 16);
+            ctx.fillRect(imageX - 12 * uiScale, imageY - 12 * uiScale, imageBoxW + 24 * uiScale, imageBoxH + 24 * uiScale);
             ctx.strokeStyle = '#7c3aed';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(imageX - 8, imageY - 8, imageSize + 16, imageSize + 16);
+            ctx.lineWidth = 6 * uiScale;
+            ctx.strokeRect(imageX - 12 * uiScale, imageY - 12 * uiScale, imageBoxW + 24 * uiScale, imageBoxH + 24 * uiScale);
             if (popupImage && popupImage.complete && popupImage.naturalWidth > 0) {
-                drawCoverImage(popupImage, imageX, imageY, imageSize, imageSize);
+                drawContainImage(popupImage, imageX, imageY, imageBoxW, imageBoxH);
             } else {
-                ctx.fillStyle = treasurePopup.item.color;
-                ctx.fillRect(imageX, imageY, imageSize, imageSize);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 34px "Galmuri11"';
+                ctx.fillStyle = '#10080a';
+                ctx.fillRect(imageX, imageY, imageBoxW, imageBoxH);
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = font(24, 'bold');
                 ctx.textAlign = 'center';
-                ctx.fillText(treasurePopup.item.icon, imageX + imageSize / 2, imageY + 62);
+                ctx.fillText('이미지 로딩 중', imageX + imageBoxW / 2, imageY + imageBoxH / 2);
             }
 
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ef4444';
-            ctx.font = 'bold 14px "Galmuri11"';
-            ctx.fillText('가치를 추가', textX, imageY + 12);
-            ctx.fillText('획득 중', textX, imageY + 32);
+            ctx.font = font(24, 'bold');
+            ctx.fillText('가치를 추가', textX, imageY + 28 * uiScale);
+            ctx.fillText('획득 중', textX, imageY + 62 * uiScale);
 
             ctx.fillStyle = '#facc15';
-            ctx.font = 'bold 17px "Galmuri11"';
-            ctx.fillText(`[${treasurePopup.item.kind}] ${treasurePopup.title}`, textX, imageY + 66);
+            ctx.font = font(38, 'bold');
+            ctx.fillText(`[${treasurePopup.item.kind}] ${treasurePopup.title}`, textX, imageY + 128 * uiScale);
 
             ctx.fillStyle = '#f8fafc';
-            ctx.font = '13px "Galmuri11"';
-            drawWrappedText(treasurePopup.description, textX, imageY + 92, textW, 20, 4);
+            ctx.font = font(25);
+            drawWrappedText(treasurePopup.description, textX, imageY + 178 * uiScale, textW, 40 * uiScale, 11);
 
-            const infoY = panelY + panelH - 66;
+            const infoY = panelY + panelH - 170 * uiScale;
+            ctx.fillStyle = 'rgba(38, 18, 8, 0.9)';
+            ctx.fillRect(panelX + 36 * uiScale, infoY - 42 * uiScale, panelW - 72 * uiScale, 112 * uiScale);
+            ctx.strokeStyle = '#4a2511';
+            ctx.lineWidth = 3 * uiScale;
+            ctx.strokeRect(panelX + 36 * uiScale, infoY - 42 * uiScale, panelW - 72 * uiScale, 112 * uiScale);
+
             ctx.fillStyle = '#facc15';
-            ctx.font = 'bold 14px "Galmuri11"';
-            ctx.fillText('[사용처]', panelX + 26, infoY);
+            ctx.font = font(25, 'bold');
+            ctx.fillText('[사용처]', panelX + 62 * uiScale, infoY);
             ctx.fillStyle = '#f8fafc';
-            ctx.font = '13px "Galmuri11"';
-            ctx.fillText(`${treasurePopup.item.kind} 도감에 사용 가능`, panelX + 26, infoY + 22);
+            ctx.font = font(22);
+            ctx.fillText(`${treasurePopup.item.kind} 도감에 사용 가능`, panelX + 62 * uiScale, infoY + 42 * uiScale);
 
             ctx.textAlign = 'right';
             ctx.fillStyle = '#fb923c';
-            ctx.font = 'bold 13px "Galmuri11"';
-            ctx.fillText(`재개까지 ${remaining}초`, panelX + panelW - 24, panelY + panelH - 18);
+            ctx.font = font(24, 'bold');
+            ctx.fillText(`재개까지 ${remaining}초`, panelX + panelW - 42 * uiScale, panelY + panelH - 38 * uiScale);
             ctx.restore();
         }
+
+        preloadConfiguredImages();
 
         // 게임 상태 관리
         let gameState = 'START'; // START, PLAYING, TRANSITION, CLEAR
@@ -1264,7 +1461,8 @@ export function createWaterFestivalGame({
             platforms.forEach(p => {
                 if (p.type === 'ground' || p.type === 'rock') {
                     // 발판 베이스 암석/대지
-                    const drewPlatformImage = drawCoverImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h);
+                    const platformTileW = Math.max(96, Math.min(260, p.h * 2.4));
+                    const drewPlatformImage = drawTiledCoverImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h, platformTileW);
                     if (!drewPlatformImage) {
                         ctx.fillStyle = hollowPalette.platform;
                         ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -1298,10 +1496,7 @@ export function createWaterFestivalGame({
                         ctx.fillRect(p.x, p.y + 5, p.w, 3);
                     }
 
-                    if (stagePlatformImages.decor && p.w >= 70) {
-                        const decorH = Math.min(30, Math.max(18, p.h * 0.28));
-                        drawCoverImage(stagePlatformImages.decor, p.x, p.y - decorH + 5, p.w, decorH);
-                    }
+                    drawStagePlatformDecor(p, stagePlatformImages.decor);
 
                     // 64비트풍 도트 장식 피어내기
                     ctx.save();
@@ -1346,14 +1541,17 @@ export function createWaterFestivalGame({
 
                 } else if (p.type === 'waterfall_wall') {
                     // 벽타기 특화 수직 벽면
-                    if (currentStage === 1) {
-                        ctx.fillStyle = '#451a03'; // 황토빛 동굴벽 느낌
-                    } else if (currentStage === 2) {
-                        ctx.fillStyle = '#1c1917'; // 목재 한옥 한식 기둥 느낌
-                    } else {
-                        ctx.fillStyle = '#0c4a6e'; // 흐르는 청량한 계곡 벽
+                    const drewWallImage = drawCoverImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h);
+                    if (!drewWallImage) {
+                        if (currentStage === 1) {
+                            ctx.fillStyle = '#451a03'; // 황토빛 동굴벽 느낌
+                        } else if (currentStage === 2) {
+                            ctx.fillStyle = '#1c1917'; // 목재 한옥 한식 기둥 느낌
+                        } else {
+                            ctx.fillStyle = '#0c4a6e'; // 흐르는 청량한 계곡 벽
+                        }
+                        ctx.fillRect(p.x, p.y, p.w, p.h);
                     }
-                    ctx.fillRect(p.x, p.y, p.w, p.h);
                     
                     const cascade = (Date.now() / 8) % 30;
                     ctx.strokeStyle = currentStage === 3 ? '#38bdf8' : '#78350f';
@@ -1369,25 +1567,7 @@ export function createWaterFestivalGame({
 
             // 위험지역
             hazards.forEach(hz => {
-                const pulse = Math.sin(Date.now() / 80) * 4;
-                const obstacleY = hz.y - Math.min(34, hz.h * 0.35) - pulse;
-                const obstacleH = hz.h + Math.min(42, hz.h * 0.45) + pulse;
-                const drewObstacleImage = drawCoverImage(stagePlatformImages.obstacle, hz.x, obstacleY, hz.w, obstacleH);
-
-                if (!drewObstacleImage) {
-                    ctx.fillStyle = currentStage === 1 ? '#78350f' : (currentStage === 2 ? '#451a03' : '#1d4ed8');
-                    ctx.fillRect(hz.x, hz.y - pulse, hz.w, hz.h + pulse);
-                }
-
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                for (let i = hz.x; i <= hz.x + hz.w; i += 8) {
-                    ctx.lineTo(i, hz.y - pulse);
-                    ctx.lineTo(i + 4, hz.y - 9 - pulse);
-                    ctx.lineTo(i + 8, hz.y - pulse);
-                }
-                ctx.stroke();
+                drawStageHazard(hz, stagePlatformImages.obstacle);
             });
 
             // 골인 아치문
