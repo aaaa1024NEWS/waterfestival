@@ -17,6 +17,36 @@ const STAGE_BACKGROUND_FILES = {
     3: 'stage-3-background.jpg'
 };
 
+const platformAssetModules = import.meta.glob('../assets/platforms/*.{jpg,jpeg,png,webp}', {
+    eager: true,
+    import: 'default',
+    query: '?url'
+});
+
+const platformAssets = Object.fromEntries(
+    Object.entries(platformAssetModules).map(([path, url]) => [
+        decodeURIComponent(path.split('/').pop()),
+        url
+    ])
+);
+
+const STAGE_PLATFORM_FILES = {
+    1: {
+        platform: '1스테이지 발판.png',
+        decor: '1스테이지 발판 장식.png',
+        obstacle: '1스테이지 장애물.png'
+    },
+    2: {
+        platform: '2스테이지 발판.png',
+        decor: '2스테이지 발판 요소.png',
+        obstacle: '2스테이지 장애물.png'
+    },
+    3: {
+        platform: '3스테이지 발판.png',
+        obstacle: '3스테이지 장애물.png'
+    }
+};
+
 const treasureAssetModules = import.meta.glob('../assets/treasures/*.{jpg,jpeg,png,webp}', {
     eager: true,
     import: 'default',
@@ -30,12 +60,85 @@ const treasureAssets = Object.fromEntries(
     ])
 );
 
+const treasurePopupAssetModules = import.meta.glob('../assets/treasure-popups/*.{jpg,jpeg,png,webp}', {
+    eager: true,
+    import: 'default',
+    query: '?url'
+});
+
+const treasurePopupAssets = Object.fromEntries(
+    Object.entries(treasurePopupAssetModules).map(([path, url]) => [
+        decodeURIComponent(path.split('/').pop()),
+        url
+    ])
+);
+
+const TREASURE_POPUP_MANIFEST = [
+    { title: '갑오징어먹찜', file: 'popup-갑오징어먹찜.jpg', description: '내장과 먹물을 빼지 않고 통째로 쪄내어 고소하고 녹진한 내장맛을 그대로 살린 것이 특징입니다.' },
+    { title: '갯장어 샤브샤브', file: 'popup-갯장어-샤브샤브.jpg', description: '단백질과 콜라겐이 풍부해 기력 회복에 탁월합니다.' },
+    { title: '굴구이', file: 'popup-굴구이.jpg', description: '양식 굴보다 알이 굵고 단단하며, 은은한 불향과 함께 덜 짜고 달콤한 바다의 풍미를 느낄 수 있습니다.' },
+    { title: '김', file: 'popup-김.jpg', description: '김 양식 과정에서 잡태와 병해를 없애기 위해 사용되는 산을 전혀 사용하지 않고 오직 햇빛과 해풍만을 이용해 기른 대한민국 대표 친환경 김입니다.' },
+    { title: '낙지', file: 'popup-낙지.jpg', description: '다리가 길고 윤기가 흐르며, 식감이 매우 부드러우면서도 깊은 감칠맛을 내는 것이 핵심 특징입니다.' },
+    { title: '된장물회', file: 'popup-된장물회.jpg', description: '고추장 대신 구수한 된장을 베이스로 육수를 내고, 잘 익은 열무김치와 신선한 제철 생선회를 듬뿍 넣어 시원하고 담백하게 즐기는 것이 특징입니다.' },
+    { title: '매생이', file: 'popup-매생이.jpg', description: '줄기세포처럼 부드럽고 가늘며, 특유의 짙은 바다 향과 찰진 식감이 특징입니다.' },
+    { title: '매생이탕', file: 'popup-매생이탕.jpg', description: '철분과 아스파라긴산이 풍부해 숙취 해소와 천연 보양식으로 탁월합니다.' },
+    { title: '무침', file: 'popup-무침.jpg', description: '전통 방식의 막걸리 식초를 사용해 깊은 풍미를 더하며, 밥이나 김 가루와 함께 비빔밥으로 즐기시면 더욱 좋습니다.' },
+    { title: '보림사', file: 'popup-보림사.png', description: '인도·중국과 함께 동양 3대 보림으로 꼽히는 천년 고찰입니다. 신라 헌안왕 때 창건되어 가지산문의 중심지가 되었으며, 사찰 내에 국보로 지정된 쌍둥이 삼층석탑, 가장 오래된 목조 사천왕상, 철조비로자나불좌상 등 수많은 국가지정 문화유산을 보유하고 있습니다.' },
+    { title: '선학동마을', file: 'popup-선학동마을.png', description: '학이 알을 품은 듯한 지형적 특징과 소설가 이청준의 \'선학동 나그네\' 및 영화 \'천년학\'의 촬영지로 유명한 문학 마을입니다.' },
+    { title: '소등섬', file: 'popup-소등섬.png', description: '하루 두 번 썰물 때 바닷길이 열리는 신비로운 무인도입니다. 아름다운 일출과 자연산 석화로 유명한 남도의 대표적인 힐링 명소입니다.' },
+    { title: '아르미쌀', file: 'popup-아르미쌀.jpg', description: '백미임에도 밥알이 뭉그러지지 않고 톡톡 씹히는 고슬한 식감과 아미노산이 풍부해 씹을수록 느껴지는 고소한 맛이 특징입니다.' },
+    { title: '우드랜드', file: 'popup-우드랜드.png', description: '40년생 이상의 빽빽한 편백나무 숲에서 강력한 피톤치드를 만끽할 수 있는 국민 힐링 명소입니다.' },
+    { title: '육포', file: 'popup-육포.jpg', description: '짜거나 자극적이지 않으며, 결을 따라 찢어지는 부드러운 식감과 씹을수록 깊어지는 담백하고 고소한 육향이 특징입니다.' },
+    { title: '전망대', file: 'popup-전망대.png', description: '대한민국의 정남쪽 나루터라는 뜻의 정남진 전망대는 하층은 파도, 중층은 황포돛대, 상층은 떠오르는 태양을 형상화한 독특한 건축 디자인이 특징입니다.' },
+    { title: '제암산', file: 'popup-제암산.png', description: '임금이 엎드려 절하는 형상의 기암괴석, 봄철의 붉은 철쭉 군락, 그리고 가을의 억새로 유명한 호남의 명산입니다.' },
+    { title: '천관산', file: 'popup-천관산.png', description: '하늘을 찌를 듯한 기암괴석과 가을철 은빛 억새밭, 다도해가 한눈에 내려다보이는 훌륭한 조망이 특징인 곳입니다.' },
+    { title: '청태전', file: 'popup-청태전.jpg', description: '푸른 이끼가 낀 엽전 모양과 같아 돈차, 전차로도 불리며, 수증기에 찐 찻잎을 둥글게 빚어 가운데 구멍을 내고 6개월 이상 발효·숙성시켜 얻은 부드러운 맛과 은은한 향이 특징입니다.' },
+    { title: '키조개', file: 'popup-키조개.jpg', description: '청정해역 득량만에서 자란 큼직한 조개와 풍성한 지역 특산물을 함께 즐기며 대표적으로는 한우 삼합으로 즐깁니다.' },
+    { title: '탐진강', file: 'popup-탐진강.png', description: '영산강, 섬진강과 함께 전라남도를 대표하는 3대 하천 중 하나입니다. 영암군 금정면에서 발원해 장흥읍 중심을 거쳐 남해로 흘러드는 총길이 55.07km의 맑은 1급수 강입니다.' },
+    { title: '토요시장', file: 'popup-토요시장.png', description: '장흥삼합의 본고장이며, 상설시장과 매월 끝자리 2·7일에 열리는 5일장이 결합되어 주말마다 문화 공연과 다채로운 먹거리를 즐길 수 있는 복합 문화 관광 명소입니다.' },
+    { title: '표고버섯', file: 'popup-표고버섯.jpg', description: '육질이 매우 단단하고 깊고 진한 향이 특징입니다.' },
+    { title: '한우삼합', file: 'popup-한우삼합.jpg', description: '한우삼합은 부드러운 한우, 쫄깃한 키조개 관자, 향긋한 표고버섯을 불판에 함께 구워 한입에 즐기는 요리입니다.' },
+    { title: '헛개나무', file: 'popup-헛개나무.jpg', description: '오염되지 않은 토양과 풍부한 일조량 덕분에 열매와 줄기의 약성이 뛰어나며, 간 기능 보호와 탁월한 숙취 해소 효능이 특징입니다.' },
+    { title: '황칠나무', file: 'popup-황칠나무.jpg', description: '장흥은 온화한 기후와 비옥한 토양을 갖추어, 국내에서도 최고 품질의 황칠나무가 자라는 최적의 산지로 꼽히며, 사포닌 성분이 풍부합니다.' },
+    { title: '황칠백숙', file: 'popup-황칠백숙.jpg', description: '나무의 산삼이라 불리는 귀한 황칠나무를 우려낸 육수로 끓여내어 깊고 은은한 향이 나는 것이 특징입니다.' }
+];
+
+const TREASURE_POPUP_ALIASES = {
+    갑오징어회먹찜: '갑오징어먹찜',
+    갯장어샤브샤브: '갯장어 샤브샤브',
+    바지락회무침: '무침',
+    장흥무산김: '김',
+    키조개요리: '키조개',
+    석화: '굴구이'
+};
+
+function normalizeTreasureName(name) {
+    return name.replace(/\s|-/g, '');
+}
+
+const treasurePopupInfoByName = new Map(
+    TREASURE_POPUP_MANIFEST.map((entry) => [normalizeTreasureName(entry.title), entry])
+);
+
 function treasureImage(filename) {
     return treasureAssets[filename];
 }
 
 function stageBackgroundImage(stage) {
     return stageBackgroundAssets[STAGE_BACKGROUND_FILES[stage]] ?? stageBackgroundAssets['stage-1-background.png'];
+}
+
+function platformAsset(filename) {
+    return platformAssets[filename];
+}
+
+function treasurePopupImage(filename) {
+    return treasurePopupAssets[filename];
+}
+
+function getTreasurePopupInfo(name) {
+    const alias = TREASURE_POPUP_ALIASES[name] ?? name;
+    return treasurePopupInfoByName.get(normalizeTreasureName(alias));
 }
 
 const STAGE_BADGES = {
@@ -68,8 +171,9 @@ export function createWaterFestivalGame({
 
     const notifyGameState = () => onGameStateChange(gameState);
     const notifyStage = () => onStageChange(getStageBadge(currentStage));
-        const treasureImageCache = new Map();
+        const assetImageCache = new Map();
         const stageBackgroundImageCache = new Map();
+        let treasurePopup = null;
 
         const hollowPalette = {
             void: '#030712',
@@ -148,16 +252,146 @@ export function createWaterFestivalGame({
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        function getTreasureImage(src) {
+        function getCachedImage(src) {
             if (!src) return null;
-            if (treasureImageCache.has(src)) {
-                return treasureImageCache.get(src);
+            if (assetImageCache.has(src)) {
+                return assetImageCache.get(src);
             }
 
             const image = new Image();
             image.src = src;
-            treasureImageCache.set(src, image);
+            assetImageCache.set(src, image);
             return image;
+        }
+
+        function getTreasureImage(src) {
+            return getCachedImage(src);
+        }
+
+        function getStagePlatformImages() {
+            const files = STAGE_PLATFORM_FILES[currentStage] ?? STAGE_PLATFORM_FILES[1];
+
+            return {
+                platform: getCachedImage(platformAsset(files.platform)),
+                decor: getCachedImage(platformAsset(files.decor)),
+                obstacle: getCachedImage(platformAsset(files.obstacle))
+            };
+        }
+
+        function showTreasurePopup(item) {
+            const popupInfo = getTreasurePopupInfo(item.name);
+            const imageSrc = popupInfo ? treasurePopupImage(popupInfo.file) : item.imageSrc;
+
+            treasurePopup = {
+                item,
+                title: item.name,
+                description: popupInfo?.description ?? `${item.kind} ${item.name} 보물을 획득했습니다.`,
+                imageSrc: imageSrc ?? item.imageSrc,
+                startedAt: performance.now(),
+                endsAt: performance.now() + 3000
+            };
+        }
+
+        function drawWrappedText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
+            let line = '';
+            let lineCount = 0;
+
+            for (const char of text) {
+                const testLine = line + char;
+                if (ctx.measureText(testLine).width > maxWidth && line) {
+                    ctx.fillText(line, x, y);
+                    y += lineHeight;
+                    line = char;
+                    lineCount++;
+                    if (lineCount >= maxLines) return y;
+                } else {
+                    line = testLine;
+                }
+            }
+
+            if (line && lineCount < maxLines) {
+                ctx.fillText(line, x, y);
+                y += lineHeight;
+            }
+
+            return y;
+        }
+
+        function drawTreasurePopup() {
+            if (!treasurePopup) return;
+
+            const popupImage = getCachedImage(treasurePopup.imageSrc);
+            const remaining = Math.max(0, Math.ceil((treasurePopup.endsAt - performance.now()) / 1000));
+            const panelW = Math.min(650, canvas.width - 80);
+            const panelH = 292;
+            const panelX = (canvas.width - panelW) / 2;
+            const panelY = Math.max(42, canvas.height * 0.18);
+            const imageSize = 96;
+            const imageX = panelX + 26;
+            const imageY = panelY + 54;
+            const textX = imageX + imageSize + 24;
+            const textW = panelW - imageSize - 76;
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#170b05';
+            ctx.fillRect(panelX, panelY, panelW, panelH);
+            ctx.strokeStyle = '#7c2d12';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+            ctx.fillStyle = '#6b2b16';
+            ctx.fillRect(panelX, panelY, panelW, 26);
+            ctx.fillStyle = '#f0abfc';
+            ctx.font = 'bold 14px "Galmuri11"';
+            ctx.textAlign = 'left';
+            ctx.fillText('영웅의 비밀(전설)', panelX + 14, panelY + 18);
+
+            ctx.fillStyle = '#050204';
+            ctx.fillRect(imageX - 8, imageY - 8, imageSize + 16, imageSize + 16);
+            ctx.strokeStyle = '#7c3aed';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(imageX - 8, imageY - 8, imageSize + 16, imageSize + 16);
+            if (popupImage && popupImage.complete && popupImage.naturalWidth > 0) {
+                drawCoverImage(popupImage, imageX, imageY, imageSize, imageSize);
+            } else {
+                ctx.fillStyle = treasurePopup.item.color;
+                ctx.fillRect(imageX, imageY, imageSize, imageSize);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 34px "Galmuri11"';
+                ctx.textAlign = 'center';
+                ctx.fillText(treasurePopup.item.icon, imageX + imageSize / 2, imageY + 62);
+            }
+
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 14px "Galmuri11"';
+            ctx.fillText('가치를 추가', textX, imageY + 12);
+            ctx.fillText('획득 중', textX, imageY + 32);
+
+            ctx.fillStyle = '#facc15';
+            ctx.font = 'bold 17px "Galmuri11"';
+            ctx.fillText(`[${treasurePopup.item.kind}] ${treasurePopup.title}`, textX, imageY + 66);
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = '13px "Galmuri11"';
+            drawWrappedText(treasurePopup.description, textX, imageY + 92, textW, 20, 4);
+
+            const infoY = panelY + panelH - 66;
+            ctx.fillStyle = '#facc15';
+            ctx.font = 'bold 14px "Galmuri11"';
+            ctx.fillText('[사용처]', panelX + 26, infoY);
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = '13px "Galmuri11"';
+            ctx.fillText(`${treasurePopup.item.kind} 도감에 사용 가능`, panelX + 26, infoY + 22);
+
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#fb923c';
+            ctx.font = 'bold 13px "Galmuri11"';
+            ctx.fillText(`재개까지 ${remaining}초`, panelX + panelW - 24, panelY + panelH - 18);
+            ctx.restore();
         }
 
         // 게임 상태 관리
@@ -294,7 +528,7 @@ export function createWaterFestivalGame({
 
         // 수렁 위험 구역들
         const hazards = [
-            { x: 550, y: 970, w: 100, h: 30, name: '심연 급류' },
+            { x: 552, y: 880, w: 96, h: 120, name: '초입 가시 함정' },
             { x: 820, y: 970, w: 300, h: 30, name: '폭포 소용돌이' },
             { x: 1370, y: 970, w: 750, h: 30, name: '수성 낭떠러지' },
             { x: 2500, y: 970, w: 450, h: 30, name: '계곡 수렁' }
@@ -618,6 +852,13 @@ export function createWaterFestivalGame({
         }
 
         function update() {
+            if (treasurePopup) {
+                if (performance.now() >= treasurePopup.endsAt) {
+                    treasurePopup = null;
+                }
+                return;
+            }
+
             if (gameState !== 'PLAYING') return;
 
             // 대시 연산
@@ -750,6 +991,8 @@ export function createWaterFestivalGame({
                     if (dist < item.r + Math.max(player.width, player.height)/2) {
                         item.collected = true;
                         createCollectParticles(item.x, item.y, item.color);
+                        showTreasurePopup(item);
+                        break;
                     }
                 }
             }
@@ -1017,11 +1260,15 @@ export function createWaterFestivalGame({
 
             // [64비트 지형 테마 렌더링 - 맵의 발판 풀 꽃 연출]
             const windTime = Date.now() * 0.0025;
+            const stagePlatformImages = getStagePlatformImages();
             platforms.forEach(p => {
                 if (p.type === 'ground' || p.type === 'rock') {
                     // 발판 베이스 암석/대지
-                    ctx.fillStyle = hollowPalette.platform;
-                    ctx.fillRect(p.x, p.y, p.w, p.h);
+                    const drewPlatformImage = drawCoverImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h);
+                    if (!drewPlatformImage) {
+                        ctx.fillStyle = hollowPalette.platform;
+                        ctx.fillRect(p.x, p.y, p.w, p.h);
+                    }
 
                     ctx.strokeStyle = hollowPalette.outline;
                     ctx.lineWidth = 3;
@@ -1049,6 +1296,11 @@ export function createWaterFestivalGame({
                         ctx.fillRect(p.x, p.y, p.w, 5);
                         ctx.fillStyle = 'rgba(125, 211, 252, 0.28)'; 
                         ctx.fillRect(p.x, p.y + 5, p.w, 3);
+                    }
+
+                    if (stagePlatformImages.decor && p.w >= 70) {
+                        const decorH = Math.min(30, Math.max(18, p.h * 0.28));
+                        drawCoverImage(stagePlatformImages.decor, p.x, p.y - decorH + 5, p.w, decorH);
                     }
 
                     // 64비트풍 도트 장식 피어내기
@@ -1118,8 +1370,14 @@ export function createWaterFestivalGame({
             // 위험지역
             hazards.forEach(hz => {
                 const pulse = Math.sin(Date.now() / 80) * 4;
-                ctx.fillStyle = currentStage === 1 ? '#78350f' : (currentStage === 2 ? '#451a03' : '#1d4ed8');
-                ctx.fillRect(hz.x, hz.y - pulse, hz.w, hz.h + pulse);
+                const obstacleY = hz.y - Math.min(34, hz.h * 0.35) - pulse;
+                const obstacleH = hz.h + Math.min(42, hz.h * 0.45) + pulse;
+                const drewObstacleImage = drawCoverImage(stagePlatformImages.obstacle, hz.x, obstacleY, hz.w, obstacleH);
+
+                if (!drewObstacleImage) {
+                    ctx.fillStyle = currentStage === 1 ? '#78350f' : (currentStage === 2 ? '#451a03' : '#1d4ed8');
+                    ctx.fillRect(hz.x, hz.y - pulse, hz.w, hz.h + pulse);
+                }
 
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 1.5;
@@ -1318,6 +1576,8 @@ export function createWaterFestivalGame({
             ctx.font = '9px "Galmuri11"';
             ctx.textAlign = 'center';
             ctx.fillText(player.dashCooldown === 0 ? 'DASH (Shift/C) 사용가능' : '대시 쿨타임 충전 중...', canvas.width / 2, dashMeterY + 14);
+
+            drawTreasurePopup();
         }
         let animationFrameId = null;
 
