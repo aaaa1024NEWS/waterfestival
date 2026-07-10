@@ -66,18 +66,15 @@ const PLAY_MODES = [
     id: 'mobile',
     icon: 'M',
     label: '모바일 버전',
-    description: '원형 패드와 액션 버튼으로 플레이'
+    description: '좌우 버튼과 액션 버튼으로 플레이'
   }
 ];
 
 function App() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
-  const joystickRef = useRef(null);
-  const joystickActiveRef = useRef(false);
   const [playMode, setPlayMode] = useState(null);
   const [selectedModeIndex, setSelectedModeIndex] = useState(0);
-  const [joystickThumb, setJoystickThumb] = useState({ x: 0, y: 0 });
   const [gameState, setGameState] = useState('START');
   const [stageBadge, setStageBadge] = useState(INITIAL_STAGE_BADGE);
   const [transitionMessage, setTransitionMessage] = useState(
@@ -144,48 +141,21 @@ function App() {
     setSelectedModeIndex((index) => (index + 1) % PLAY_MODES.length);
   const backToModeSelect = () => setPlayMode(null);
 
-  const updateJoystick = (event) => {
+  const pressMoveLeft = (event) => {
     event.preventDefault();
-    const rect = joystickRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const rawX = event.clientX - centerX;
-    const rawY = event.clientY - centerY;
-    const maxDistance = rect.width * 0.33;
-    const distance = Math.hypot(rawX, rawY);
-    const clampRatio = distance > maxDistance ? maxDistance / distance : 1;
-    const x = rawX * clampRatio;
-    const y = rawY * clampRatio;
-
-    setJoystickThumb({ x, y });
-
-    if (x < -12) {
-      gameRef.current?.setMoveDirection('left');
-    } else if (x > 12) {
-      gameRef.current?.setMoveDirection('right');
-    } else {
-      gameRef.current?.stopMove();
-    }
-  };
-
-  const startJoystick = (event) => {
-    joystickActiveRef.current = true;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    updateJoystick(event);
+    gameRef.current?.setMoveDirection('left');
   };
 
-  const moveJoystick = (event) => {
-    if (!joystickActiveRef.current) return;
-    updateJoystick(event);
-  };
-
-  const releaseJoystick = (event) => {
+  const pressMoveRight = (event) => {
     event.preventDefault();
-    joystickActiveRef.current = false;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    gameRef.current?.setMoveDirection('right');
+  };
+
+  const releaseMove = (event) => {
+    event.preventDefault();
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-    setJoystickThumb({ x: 0, y: 0 });
     gameRef.current?.stopMove();
   };
 
@@ -291,7 +261,7 @@ function App() {
                   <h2>아크로바틱 조작법</h2>
                   {playMode === 'mobile' ? (
                     <>
-                      <p>좌/우 패드: 이동</p>
+                      <p>좌/우 버튼: 이동</p>
                       <p>JUMP: 2단 점프와 벽점프</p>
                       <p>DASH: 돌진</p>
                       <p>SHOT: 아래 방향 고정 물총</p>
@@ -366,20 +336,27 @@ function App() {
 
           {playMode === 'mobile' && gameState === 'PLAYING' && (
             <div className="mobile-pad" onContextMenu={(event) => event.preventDefault()}>
-              <div
-                ref={joystickRef}
-                className="joystick"
-                aria-label="이동 원형 패드"
-                onPointerDown={startJoystick}
-                onPointerMove={moveJoystick}
-                onPointerUp={releaseJoystick}
-                onPointerCancel={releaseJoystick}
-                onPointerLeave={releaseJoystick}
-              >
-                <span
-                  className="joystick-thumb"
-                  style={{ transform: `translate(${joystickThumb.x}px, ${joystickThumb.y}px)` }}
-                />
+              <div className="pad-cluster move-cluster" aria-label="이동 패드">
+                <button
+                  className="pad-button arrow"
+                  type="button"
+                  onPointerDown={pressMoveLeft}
+                  onPointerUp={releaseMove}
+                  onPointerCancel={releaseMove}
+                  onPointerLeave={releaseMove}
+                >
+                  ◀
+                </button>
+                <button
+                  className="pad-button arrow"
+                  type="button"
+                  onPointerDown={pressMoveRight}
+                  onPointerUp={releaseMove}
+                  onPointerCancel={releaseMove}
+                  onPointerLeave={releaseMove}
+                >
+                  ▶
+                </button>
               </div>
 
               <div className="pad-cluster action-cluster" aria-label="액션 패드">
@@ -418,7 +395,7 @@ function App() {
         <footer className="game-footer">
           <p>
             {playMode === 'mobile'
-              ? '모바일 버전에서는 원형 패드로 좌우 이동하고, SHOT은 아래 방향으로 발사됩니다.'
+              ? '모바일 버전에서는 좌우 버튼으로 이동하고, SHOT은 아래 방향으로 발사됩니다.'
               : 'PC 버전에서는 게임 화면을 한 번 클릭하면 조작 초점이 바로 돌아옵니다.'}
           </p>
           <p>

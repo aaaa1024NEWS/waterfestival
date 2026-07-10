@@ -533,64 +533,14 @@ button {
   touch-action: none;
 }
 
-.joystick {
-  position: relative;
-  width: clamp(96px, 17vw, 142px);
-  height: clamp(96px, 17vw, 142px);
-  pointer-events: auto;
-  touch-action: none;
-  border: 4px solid #e2e8f0;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at center, rgba(125, 211, 252, 0.22) 0 28%, transparent 29%),
-    radial-gradient(circle at center, rgba(15, 23, 42, 0.92) 0 58%, rgba(2, 6, 23, 0.94) 60%);
-  box-shadow:
-    0 0 0 4px #020617,
-    6px 6px 0 rgba(37, 99, 235, 0.82);
-}
-
-.joystick::before,
-.joystick::after {
-  content: '';
-  position: absolute;
-  background: rgba(248, 250, 252, 0.25);
-}
-
-.joystick::before {
-  left: 12%;
-  right: 12%;
-  top: 50%;
-  height: 3px;
-  transform: translateY(-50%);
-}
-
-.joystick::after {
-  top: 12%;
-  bottom: 12%;
-  left: 50%;
-  width: 3px;
-  transform: translateX(-50%);
-}
-
-.joystick-thumb {
-  position: absolute;
-  left: calc(50% - 21px);
-  top: calc(50% - 21px);
-  z-index: 1;
-  width: 42px;
-  height: 42px;
-  border: 3px solid #020617;
-  border-radius: 999px;
-  background: #fde047;
-  box-shadow:
-    inset -4px -4px 0 rgba(180, 83, 9, 0.55),
-    3px 3px 0 #0891b2;
-}
-
 .pad-cluster {
   display: flex;
   gap: 8px;
   pointer-events: auto;
+}
+
+.move-cluster {
+  align-items: flex-end;
 }
 
 .action-cluster {
@@ -616,7 +566,12 @@ button {
 .pad-button.arrow {
   color: #020617;
   background: rgba(250, 204, 21, 0.92);
-  font-size: 1.2rem;
+  font-size: 1.35rem;
+}
+
+.move-cluster .pad-button {
+  width: clamp(58px, 9vw, 74px);
+  height: clamp(58px, 9vw, 74px);
 }
 
 .pad-button.jump {
@@ -885,11 +840,6 @@ button {
 
   .mobile-pad {
     inset: auto 10px 10px 10px;
-  }
-
-  .joystick {
-    width: 104px;
-    height: 104px;
   }
 
   .pad-cluster {

@@ -346,51 +346,7 @@ export function createWaterFestivalGame({
         }
 
         function drawStagePlatformDecor(p, decorImage) {
-            if (!decorImage || !decorImage.complete || decorImage.naturalWidth === 0 || p.w < 62) return;
-
-            if (currentStage === 1) {
-                const decorH = Math.min(22, Math.max(12, p.h * 0.28));
-                const decorW = decorH * (decorImage.naturalWidth / decorImage.naturalHeight);
-                const gap = Math.max(18, decorW * 0.42);
-
-                ctx.save();
-                ctx.globalAlpha = 0.95;
-                for (let x = p.x - decorW * 0.2; x < p.x + p.w - decorW * 0.35; x += gap) {
-                    const sway = Math.sin((x + Date.now() * 0.08) * 0.04) * 2;
-                    drawContainImage(decorImage, x + sway, p.y - decorH + 5, decorW, decorH);
-                }
-                ctx.restore();
-                return;
-            }
-
-            if (currentStage === 2) {
-                const cols = 4;
-                const rows = 4;
-                const cellW = decorImage.naturalWidth / cols;
-                const cellH = decorImage.naturalHeight / rows;
-                const propCount = Math.min(4, Math.max(1, Math.floor(p.w / 115)));
-                const baseIndex = Math.abs(Math.floor(p.x / 37) + Math.floor(p.y / 19));
-
-                ctx.save();
-                ctx.globalAlpha = 0.88;
-                for (let i = 0; i < propCount; i++) {
-                    const spriteIndex = (baseIndex + i * 5) % (cols * rows);
-                    const col = spriteIndex % cols;
-                    const row = Math.floor(spriteIndex / cols);
-                    const sx = col * cellW + 16;
-                    const sy = row * cellH + 10;
-                    const sw = cellW - 32;
-                    const sh = cellH * 0.68;
-                    const drawW = Math.min(62, Math.max(38, p.w / (propCount + 1) * 0.58));
-                    const drawH = drawW * (sh / sw);
-                    const dx = p.x + ((i + 1) * p.w) / (propCount + 1) - drawW / 2;
-                    const dy = p.y - drawH + 7;
-
-                    ctx.drawImage(decorImage, sx, sy, sw, sh, dx, dy, drawW, drawH);
-                }
-                ctx.restore();
-                return;
-            }
+            return;
         }
 
         function drawStageHazard(hz, obstacleImage) {
