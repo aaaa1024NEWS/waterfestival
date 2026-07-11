@@ -205,7 +205,9 @@ export function createWaterFestivalGame({
     onGameStateChange = () => {},
     onStageChange = () => {},
     onTransitionMessageChange = () => {},
-    onTreasurePopupChange = () => {}
+    onTreasurePopupChange = () => {},
+    onRunStatsChange = () => {},
+    onRunComplete = () => {}
 }) {
     if (!canvas) {
         throw new Error('Canvas element is required.');
@@ -218,6 +220,7 @@ export function createWaterFestivalGame({
     const notifyStage = () => onStageChange(getStageBadge(currentStage));
         const assetImageCache = new Map();
         const stageBackgroundImageCache = new Map();
+        const assetBoundsCache = new Map();
         let treasurePopup = null;
 
         const hollowPalette = {
@@ -254,6 +257,56 @@ export function createWaterFestivalGame({
             }
 
             ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+            return true;
+        }
+
+        function getAssetBounds(image) {
+            if (!image || !image.complete || image.naturalWidth === 0) return null;
+            if (assetBoundsCache.has(image.src)) return assetBoundsCache.get(image.src);
+
+            const scratch = document.createElement('canvas');
+            scratch.width = image.naturalWidth;
+            scratch.height = image.naturalHeight;
+            const scratchContext = scratch.getContext('2d', { willReadFrequently: true });
+            scratchContext.drawImage(image, 0, 0);
+            const pixels = scratchContext.getImageData(0, 0, scratch.width, scratch.height).data;
+            let minX = scratch.width;
+            let minY = scratch.height;
+            let maxX = -1;
+            let maxY = -1;
+
+            for (let y = 0; y < scratch.height; y += 1) {
+                for (let x = 0; x < scratch.width; x += 1) {
+                    if (pixels[(y * scratch.width + x) * 4 + 3] > 8) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            const bounds = maxX < 0
+                ? { x: 0, y: 0, w: image.naturalWidth, h: image.naturalHeight }
+                : { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+            assetBoundsCache.set(image.src, bounds);
+            return bounds;
+        }
+
+        function drawAssetImage(image, dx, dy, dw, dh) {
+            const bounds = getAssetBounds(image);
+            if (!bounds) return false;
+            ctx.drawImage(image, bounds.x, bounds.y, bounds.w, bounds.h, dx, dy, dw, dh);
+            return true;
+        }
+
+        function drawTiledAssetImage(image, dx, dy, dw, dh, tileW = 180) {
+            if (!getAssetBounds(image)) return false;
+
+            for (let x = dx; x < dx + dw - 0.5; x += tileW) {
+                const w = Math.min(tileW, dx + dw - x);
+                drawAssetImage(image, x, dy, w, dh);
+            }
             return true;
         }
 
@@ -355,7 +408,7 @@ export function createWaterFestivalGame({
             const visualH = Math.min(170, Math.max(76, hz.h + 62));
             const visualY = hz.y + hz.h - visualH - pulse;
             const tileW = Math.max(132, visualH * 1.8);
-            const drewObstacleImage = drawTiledCoverImage(obstacleImage, hz.x, visualY, hz.w, visualH, tileW);
+            const drewObstacleImage = drawTiledAssetImage(obstacleImage, hz.x, visualY, hz.w, visualH, tileW);
 
             if (drewObstacleImage) {
                 return;
@@ -537,6 +590,10 @@ export function createWaterFestivalGame({
         // 게임 상태 관리
         let gameState = 'START'; // START, PLAYING, TRANSITION, CLEAR
         let currentStage = 1; // 1, 2, 3
+        let runMetadata = {};
+        let runStats = { currentStage: 1, stageTimes: [0, 0, 0], totalTime: 0 };
+        let lastFrameTime = performance.now();
+        let lastStatsNotify = 0;
         // 카메라 시점 줌인 배율
         const zoom = 1.6;
 
@@ -840,14 +897,29 @@ export function createWaterFestivalGame({
         }
         let playerNickname = '';
 
+        function notifyRunStats(force = false) {
+            const now = performance.now();
+            if (!force && now - lastStatsNotify < 100) return;
+            lastStatsNotify = now;
+            onRunStatsChange({
+                currentStage,
+                stageTimes: [...runStats.stageTimes],
+                totalTime: runStats.totalTime
+            });
+        }
+
         function startGame(options = {}) {
             gameState = 'PLAYING';
             currentStage = 1;
             playerNickname = String(options.nickname ?? '').trim().slice(0, 12);
+            runMetadata = { nickname: playerNickname, playMode: options.playMode ?? 'pc' };
+            runStats = { currentStage: 1, stageTimes: [0, 0, 0], totalTime: 0 };
+            lastFrameTime = performance.now();
             treasurePopup = null;
             onTreasurePopupChange(null);
             setupStage();
             notifyGameState();
+            notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
         }
 
@@ -1192,6 +1264,12 @@ export function createWaterFestivalGame({
                     } else {
                         gameState = 'CLEAR';
                         notifyGameState();
+                        notifyRunStats(true);
+                        onRunComplete({
+                            ...runMetadata,
+                            stageTimes: [...runStats.stageTimes],
+                            totalTime: runStats.totalTime
+                        });
                     }
                 } else {
                     player.vx = -4; // 보물이 전부 없을 시 입장 튕김
@@ -1445,7 +1523,7 @@ export function createWaterFestivalGame({
                 if (p.type === 'ground' || p.type === 'rock') {
                     // 발판 베이스 암석/대지
                     const platformTileW = Math.max(96, Math.min(260, p.h * 2.4));
-                    const drewPlatformImage = drawTiledCoverImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h, platformTileW);
+                    const drewPlatformImage = drawTiledAssetImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h, platformTileW);
                     if (!drewPlatformImage) {
                         ctx.fillStyle = hollowPalette.platform;
                         ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -1458,7 +1536,7 @@ export function createWaterFestivalGame({
 
                 } else if (p.type === 'waterfall_wall') {
                     // 벽타기 특화 수직 벽면
-                    const drewWallImage = drawCoverImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h);
+                    const drewWallImage = drawAssetImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h);
                     if (!drewWallImage) {
                         if (currentStage === 1) {
                             ctx.fillStyle = '#451a03'; // 황토빛 동굴벽 느낌
@@ -1668,7 +1746,15 @@ export function createWaterFestivalGame({
         }
         let animationFrameId = null;
 
-        function gameLoop() {
+        function gameLoop(frameTime = performance.now()) {
+            const frameDelta = Math.min(100, Math.max(0, frameTime - lastFrameTime));
+            lastFrameTime = frameTime;
+            if (gameState === 'PLAYING' && !treasurePopup) {
+                runStats.stageTimes[currentStage - 1] += frameDelta;
+                runStats.totalTime += frameDelta;
+                runStats.currentStage = currentStage;
+                notifyRunStats();
+            }
             update();
             draw();
             animationFrameId = requestAnimationFrame(gameLoop);
@@ -1729,8 +1815,11 @@ export function createWaterFestivalGame({
 
             currentStage++;
             gameState = 'PLAYING';
+            runStats.currentStage = currentStage;
+            lastFrameTime = performance.now();
             setupStage();
             notifyGameState();
+            notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
         }
 
