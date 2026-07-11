@@ -153,6 +153,51 @@ button:disabled {
   image-rendering: pixelated;
 }
 
+.game-timers {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 5px;
+  width: min(92%, 520px);
+  padding: 7px;
+  color: #e2e8f0;
+  background: rgba(2, 6, 23, 0.92);
+  border: 2px solid #38bdf8;
+  transform: translateX(-50%);
+  font-family: Consolas, 'Malgun Gothic', monospace;
+  pointer-events: none;
+}
+
+.game-timers div {
+  display: grid;
+  gap: 2px;
+  padding: 3px 6px;
+  border-right: 1px solid #334155;
+  text-align: center;
+}
+
+.game-timers div:last-child {
+  border-right: 0;
+}
+
+.game-timers span {
+  color: #94a3b8;
+  font-size: 0.55rem;
+}
+
+.game-timers strong {
+  color: #fde047;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-timers .total strong {
+  color: #67e8f9;
+}
+
 .overlay {
   position: absolute;
   inset: 0;
@@ -420,6 +465,41 @@ button:disabled {
   color: #94a3b8;
   font-family: Consolas, monospace;
   font-size: 0.6rem;
+}
+
+.run-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(100%, 720px);
+  background: rgba(2, 6, 23, 0.92);
+  border: 3px solid #60a5fa;
+}
+
+.run-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-right: 1px solid #334155;
+}
+
+.run-summary > div:last-child {
+  border-right: 0;
+}
+
+.run-summary span {
+  color: #94a3b8;
+  font-size: 0.58rem;
+}
+
+.run-summary strong {
+  color: #e2e8f0;
+  font-family: Consolas, monospace;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-summary .total strong {
+  color: #fde047;
 }
 
 .mode-card {
@@ -962,6 +1042,25 @@ button:disabled {
     font-size: 0.76rem;
   }
 
+  .game-timers {
+    top: 6px;
+    width: min(96%, 380px);
+    gap: 2px;
+    padding: 4px;
+  }
+
+  .game-timers div {
+    padding: 2px 3px;
+  }
+
+  .game-timers span {
+    font-size: 0.45rem;
+  }
+
+  .game-timers strong {
+    font-size: 0.55rem;
+  }
+
   .mode-arrow {
     width: 40px;
     height: 62px;
@@ -1039,6 +1138,14 @@ button:disabled {
   .overlay-clear {
     justify-content: flex-start;
     overflow-y: auto;
+  }
+
+  .run-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .run-summary > div:nth-child(2) {
+    border-right: 0;
   }
 
   .treasure-popup-overlay {
