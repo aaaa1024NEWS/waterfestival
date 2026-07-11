@@ -204,7 +204,10 @@ export function createWaterFestivalGame({
     canvas,
     onGameStateChange = () => {},
     onStageChange = () => {},
-    onTransitionMessageChange = () => {}
+    onTransitionMessageChange = () => {},
+    onTreasurePopupChange = () => {},
+    onRunStatsChange = () => {},
+    onRunComplete = () => {}
 }) {
     if (!canvas) {
         throw new Error('Canvas element is required.');
@@ -385,8 +388,18 @@ export function createWaterFestivalGame({
                 description: popupInfo?.description ?? `${item.kind} ${item.name} 보물을 획득했습니다.`,
                 imageSrc: popupImageSrc,
                 startedAt: performance.now(),
-                endsAt: performance.now() + 3000
+                closeEnabledAt: performance.now() + 3000
             };
+            onTreasurePopupChange({ ...treasurePopup });
+        }
+
+        function closeTreasurePopup() {
+            if (!treasurePopup || performance.now() < treasurePopup.closeEnabledAt) return false;
+
+            treasurePopup = null;
+            onTreasurePopupChange(null);
+            forceFocusOnGame();
+            return true;
         }
 
         function drawWrappedText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
@@ -418,7 +431,7 @@ export function createWaterFestivalGame({
             if (!treasurePopup) return;
 
             const popupImage = getCachedImage(treasurePopup.imageSrc);
-            const remaining = Math.max(0, Math.ceil((treasurePopup.endsAt - performance.now()) / 1000));
+            const remaining = Math.max(0, Math.ceil((treasurePopup.closeEnabledAt - performance.now()) / 1000));
             const isMobilePopup = window.matchMedia?.('(max-width: 900px), (pointer: coarse)').matches ?? false;
             const panelW = isMobilePopup ? Math.min(1320, canvas.width - 180) : Math.min(1460, canvas.width - 80);
             const panelH = isMobilePopup ? Math.min(780, canvas.height - 140) : Math.min(1040, canvas.height - 40);
@@ -517,7 +530,7 @@ export function createWaterFestivalGame({
             ctx.textAlign = 'right';
             ctx.fillStyle = '#fb923c';
             ctx.font = font(isMobilePopup ? 21 : 24, 'bold');
-            ctx.fillText(`재개까지 ${remaining}초`, Math.round(panelX + panelW - 42 * uiScale), Math.round(panelY + panelH - 38 * uiScale));
+            ctx.fillText(remaining > 0 ? `닫기 버튼까지 ${remaining}초` : '창 닫기 버튼을 눌러 계속하세요', Math.round(panelX + panelW - 42 * uiScale), Math.round(panelY + panelH - 38 * uiScale));
             ctx.restore();
         }
 
@@ -526,6 +539,10 @@ export function createWaterFestivalGame({
         // 게임 상태 관리
         let gameState = 'START'; // START, PLAYING, TRANSITION, CLEAR
         let currentStage = 1; // 1, 2, 3
+        let runMetadata = {};
+        let runStats = { stageTimes: [0, 0, 0], totalTime: 0 };
+        let lastFrameTime = performance.now();
+        let lastStatsNotify = 0;
         // 카메라 시점 줌인 배율
         const zoom = 1.6;
 
@@ -811,16 +828,33 @@ export function createWaterFestivalGame({
             notifyStage();
         }
 
+        function notifyRunStats(force = false) {
+            const now = performance.now();
+            if (!force && now - lastStatsNotify < 100) return;
+            lastStatsNotify = now;
+            onRunStatsChange({
+                currentStage,
+                stageTimes: [...runStats.stageTimes],
+                totalTime: runStats.totalTime
+            });
+        }
+
         // 포커스 획득 보조 유틸 함수 (이프레임 제약 돌파용)
         function forceFocusOnGame() {
             canvas.focus();
             window.focus();
         }
-        function startGame() {
+        function startGame(metadata = {}) {
             gameState = 'PLAYING';
             currentStage = 1;
+            runMetadata = metadata;
+            runStats = { stageTimes: [0, 0, 0], totalTime: 0 };
+            treasurePopup = null;
+            onTreasurePopupChange(null);
+            lastFrameTime = performance.now();
             setupStage();
             notifyGameState();
+            notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
         }
 
@@ -982,9 +1016,6 @@ export function createWaterFestivalGame({
 
         function update() {
             if (treasurePopup) {
-                if (performance.now() >= treasurePopup.endsAt) {
-                    treasurePopup = null;
-                }
                 return;
             }
 
@@ -1041,7 +1072,7 @@ export function createWaterFestivalGame({
             const oldX = player.x;
             const oldY = player.y;
 
-            // X축 이동 및 충돌
+            // X축 이동 및 충돌. 세로 벽만 옆면 충돌을 사용합니다.
             player.x += player.vx;
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > levelWidth) player.x = levelWidth - player.width;
@@ -1049,7 +1080,7 @@ export function createWaterFestivalGame({
             let onWall = false;
             let wallSide = null;
 
-            for (const p of platforms) {
+            for (const p of platforms.filter((platform) => platform.type === 'waterfall_wall')) {
                 if (checkCollision({ x: player.x, y: player.y, w: player.width, h: player.height }, p)) {
                     if (player.vx > 0) {
                         player.x = p.x - player.width;
@@ -1068,21 +1099,22 @@ export function createWaterFestivalGame({
                 }
             }
 
-            // Y축 이동 및 충돌
+            // Y축 이동 및 충돌. 이미지 발판은 보이는 윗면만 한 방향 발판으로 취급합니다.
             player.y += player.vy;
             player.isGrounded = false;
 
             for (const p of platforms) {
-                if (checkCollision({ x: player.x, y: player.y, w: player.width, h: player.height }, p)) {
-                    if (player.vy > 0) {
-                        player.y = p.y - player.height;
-                        player.isGrounded = true;
-                        player.canDoubleJump = true;
-                        player.hasDoubleJumped = false;
-                        player.canDash = true;
-                    } else if (player.vy < 0) {
-                        player.y = p.y + p.h;
-                    }
+                const horizontalOverlap = player.x + player.width > p.x && player.x < p.x + p.w;
+                const oldBottom = oldY + player.height;
+                const newBottom = player.y + player.height;
+                const crossedTop = player.vy >= 0 && oldBottom <= p.y + 8 && newBottom >= p.y;
+
+                if (horizontalOverlap && crossedTop) {
+                    player.y = p.y - player.height;
+                    player.isGrounded = true;
+                    player.canDoubleJump = true;
+                    player.hasDoubleJumped = false;
+                    player.canDash = true;
                     player.vy = 0;
                 }
             }
@@ -1126,6 +1158,16 @@ export function createWaterFestivalGame({
                 }
             }
 
+            // 충돌 영역을 빠르게 통과하거나 맵 끝 고랑 아래로 떨어져도 반드시 낙사 처리합니다.
+            if (player.y + player.height >= levelHeight - 2) {
+                createCollectParticles(player.x + player.width / 2, levelHeight - 20, '#ef4444');
+                player.x = 100;
+                player.y = 800;
+                player.vx = 0;
+                player.vy = 0;
+                player.isGrounded = false;
+            }
+
             // 축제 아치 도달 시 다음 스테이지 이동 또는 클리어
             const allCollected = activeItems.every(item => item.collected);
             if (checkCollision({ x: player.x, y: player.y, w: player.width, h: player.height }, goal)) {
@@ -1137,6 +1179,12 @@ export function createWaterFestivalGame({
                     } else {
                         gameState = 'CLEAR';
                         notifyGameState();
+                        notifyRunStats(true);
+                        onRunComplete({
+                            ...runMetadata,
+                            stageTimes: [...runStats.stageTimes],
+                            totalTime: runStats.totalTime
+                        });
                     }
                 } else {
                     player.vx = -4; // 보물이 전부 없을 시 입장 튕김
@@ -1609,11 +1657,18 @@ export function createWaterFestivalGame({
             ctx.textAlign = 'center';
             ctx.fillText(player.dashCooldown === 0 ? 'DASH (Shift/C) 사용가능' : '대시 쿨타임 충전 중...', canvas.width / 2, dashMeterY + 14);
 
-            drawTreasurePopup();
+            // 보물 팝업은 한글을 선명하게 표시하기 위해 React DOM 레이어에서 렌더링합니다.
         }
         let animationFrameId = null;
 
-        function gameLoop() {
+        function gameLoop(frameTime = performance.now()) {
+            const frameDelta = Math.min(100, Math.max(0, frameTime - lastFrameTime));
+            lastFrameTime = frameTime;
+            if (gameState === 'PLAYING' && !treasurePopup) {
+                runStats.stageTimes[currentStage - 1] += frameDelta;
+                runStats.totalTime += frameDelta;
+                notifyRunStats();
+            }
             update();
             draw();
             animationFrameId = requestAnimationFrame(gameLoop);
@@ -1674,8 +1729,10 @@ export function createWaterFestivalGame({
 
             currentStage++;
             gameState = 'PLAYING';
+            lastFrameTime = performance.now();
             setupStage();
             notifyGameState();
+            notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
         }
 
@@ -1752,6 +1809,7 @@ export function createWaterFestivalGame({
             releaseDash,
             shootForward,
             shootDown,
+            closeTreasurePopup,
             destroy() {
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
