@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createWaterFestivalGame } from './gameEngine';
+import { createRunRecord } from './lib/runRecord';
 
 const INITIAL_STAGE_BADGE = {
   label: 'STAGE 1 : 천관산 억새밭',
@@ -29,6 +30,20 @@ const PLAY_MODES = [
   { id: 'mobile', icon: 'M', label: '모바일 버전', description: '가상 패드와 액션 버튼으로 플레이' }
 ];
 
+const EMPTY_RUN_STATS = {
+  currentStage: 1,
+  stageTimes: [0, 0, 0],
+  totalTime: 0
+};
+
+function formatDuration(milliseconds = 0) {
+  const totalCentiseconds = Math.max(0, Math.floor(milliseconds / 10));
+  const minutes = Math.floor(totalCentiseconds / 6000);
+  const seconds = Math.floor((totalCentiseconds % 6000) / 100);
+  const centiseconds = totalCentiseconds % 100;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+}
+
 function App() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
@@ -40,6 +55,8 @@ function App() {
   const [transitionMessage, setTransitionMessage] = useState('천관산의 가을 억새 보물을 모두 찾았습니다!');
   const [treasurePopup, setTreasurePopup] = useState(null);
   const [popupCanClose, setPopupCanClose] = useState(false);
+  const [runStats, setRunStats] = useState(EMPTY_RUN_STATS);
+  const [lastRun, setLastRun] = useState(null);
 
   useEffect(() => {
     const prefersMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
@@ -54,7 +71,9 @@ function App() {
       onGameStateChange: setGameState,
       onStageChange: setStageBadge,
       onTransitionMessageChange: setTransitionMessage,
-      onTreasurePopupChange: setTreasurePopup
+      onTreasurePopupChange: setTreasurePopup,
+      onRunStatsChange: setRunStats,
+      onRunComplete: (record) => setLastRun(createRunRecord(record))
     });
 
     gameRef.current = engine;
@@ -102,13 +121,15 @@ function App() {
   };
 
   const startGame = async () => {
+    setLastRun(null);
     await requestMobileLandscape();
-    gameRef.current?.start({ nickname: cleanNickname });
+    gameRef.current?.start({ nickname: cleanNickname, playMode });
   };
 
   const restartGame = async () => {
+    setLastRun(null);
     await requestMobileLandscape();
-    gameRef.current?.restart({ nickname: cleanNickname });
+    gameRef.current?.restart({ nickname: cleanNickname, playMode });
   };
 
   const closeTreasurePopup = () => {
@@ -158,6 +179,15 @@ function App() {
 
         <div className="canvas-frame">
           <canvas ref={canvasRef} width="1920" height="1080" tabIndex="0" />
+
+          {playMode && gameState !== 'START' && (
+            <div className="game-timers" aria-label="스테이지별 초시계">
+              <div><span>STAGE 1</span><strong>{formatDuration(runStats.stageTimes[0])}</strong></div>
+              <div><span>STAGE 2</span><strong>{formatDuration(runStats.stageTimes[1])}</strong></div>
+              <div><span>STAGE 3</span><strong>{formatDuration(runStats.stageTimes[2])}</strong></div>
+              <div className="total"><span>TOTAL</span><strong>{formatDuration(runStats.totalTime)}</strong></div>
+            </div>
+          )}
 
           {!playMode && (
             <div className="overlay overlay-start retro-screen">
@@ -221,7 +251,11 @@ function App() {
           {gameState === 'CLEAR' && (
             <div className="overlay overlay-clear">
               <p className="pixel-eyebrow">QUEST COMPLETE</p>
-              <div className="overlay-title">27대 보물 마스터!</div>
+              <div className="overlay-title">{lastRun?.nickname || cleanNickname}의 27대 보물 마스터!</div>
+              <div className="run-summary" aria-label="완주 기록">
+                {runStats.stageTimes.map((time, index) => <div key={index}><span>STAGE {index + 1}</span><strong>{formatDuration(time)}</strong></div>)}
+                <div className="total"><span>TOTAL</span><strong>{formatDuration(runStats.totalTime)}</strong></div>
+              </div>
               <div className="treasure-grid">
                 {TREASURE_COLUMNS.map((column) => (
                   <section className={`treasure-column ${column.tone}`} key={column.title}>
