@@ -382,6 +382,46 @@ button:disabled {
   line-height: 1.35;
 }
 
+.nickname-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 280px) auto;
+  align-items: center;
+  gap: 9px;
+  width: min(100%, 430px);
+  padding: 9px 12px;
+  color: #fde047;
+  background: #111827;
+  border: 3px solid #facc15;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.nickname-field input {
+  min-width: 0;
+  height: 40px;
+  padding: 0 11px;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 3px solid #2563eb;
+  border-radius: 0;
+  outline: none;
+  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.nickname-field input:focus {
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 3px #020617;
+}
+
+.nickname-field small {
+  color: #94a3b8;
+  font-family: Consolas, monospace;
+  font-size: 0.6rem;
+}
+
 .mode-card {
   display: grid;
   place-items: center;
@@ -905,6 +945,21 @@ button:disabled {
     grid-template-columns: 42px minmax(0, 1fr) 42px;
     gap: 7px;
     width: min(100%, 330px);
+  }
+
+  .nickname-field {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    width: min(100%, 330px);
+    padding: 7px 8px;
+    border-width: 2px;
+    font-size: 0.6rem;
+  }
+
+  .nickname-field input {
+    height: 36px;
+    padding: 0 8px;
+    border-width: 2px;
+    font-size: 0.76rem;
   }
 
   .mode-arrow {
