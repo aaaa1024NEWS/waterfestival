@@ -674,6 +674,17 @@ export function createWaterFestivalGame({
             { x: 2500, y: 970, w: 450, h: 30, name: '계곡 수렁' }
         ];
 
+        // 발판 사이의 모든 고랑을 아래쪽까지 덮어 빠른 낙하도 놓치지 않습니다.
+        const pitDeathZones = [
+            { x: 550, y: 900, w: 100, h: 240 },
+            { x: 800, y: 900, w: 320, h: 240 },
+            { x: 1370, y: 900, w: 750, h: 240 },
+            { x: 2500, y: 900, w: 450, h: 240 }
+        ];
+
+        const isSolidStructure = (platform) =>
+            platform.type === 'waterfall_wall' || (platform.type === 'rock' && platform.h >= 90);
+
         // 최종 아치
         const goal = { x: 3100, y: 750, w: 70, h: 80, name: '아치 게이트' };
 
@@ -827,9 +838,12 @@ export function createWaterFestivalGame({
             canvas.focus();
             window.focus();
         }
-        function startGame() {
+        let playerNickname = '';
+
+        function startGame(options = {}) {
             gameState = 'PLAYING';
             currentStage = 1;
+            playerNickname = String(options.nickname ?? '').trim().slice(0, 12);
             treasurePopup = null;
             onTreasurePopupChange(null);
             setupStage();
@@ -993,6 +1007,17 @@ export function createWaterFestivalGame({
                    r1.y + r1.h > r2.y;
         }
 
+        function respawnPlayer() {
+            createCollectParticles(player.x + player.width / 2, player.y + player.height / 2, '#ef4444');
+            player.x = 100;
+            player.y = 800;
+            player.vx = 0;
+            player.vy = 0;
+            player.isGrounded = false;
+            player.isWallSliding = false;
+            player.wallSlidingSide = null;
+        }
+
         function update() {
             if (treasurePopup) {
                 return;
@@ -1051,7 +1076,7 @@ export function createWaterFestivalGame({
             const oldX = player.x;
             const oldY = player.y;
 
-            // X축 이동 및 충돌. 세로 벽만 옆면 충돌을 사용합니다.
+            // 높게 솟은 구조물은 보이는 사각형 전체를 벽으로 사용합니다.
             player.x += player.vx;
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > levelWidth) player.x = levelWidth - player.width;
@@ -1059,7 +1084,7 @@ export function createWaterFestivalGame({
             let onWall = false;
             let wallSide = null;
 
-            for (const p of platforms.filter((platform) => platform.type === 'waterfall_wall')) {
+            for (const p of platforms.filter(isSolidStructure)) {
                 if (checkCollision({ x: player.x, y: player.y, w: player.width, h: player.height }, p)) {
                     if (player.vx > 0) {
                         player.x = p.x - player.width;
@@ -1078,7 +1103,7 @@ export function createWaterFestivalGame({
                 }
             }
 
-            // Y축 이동 및 충돌. 이미지 발판은 보이는 윗면만 한 방향 발판으로 취급합니다.
+            // 얇은 발판은 윗면만, 높게 솟은 구조물은 윗면과 아랫면을 모두 충돌 처리합니다.
             player.y += player.vy;
             player.isGrounded = false;
 
@@ -1087,6 +1112,7 @@ export function createWaterFestivalGame({
                 const oldBottom = oldY + player.height;
                 const newBottom = player.y + player.height;
                 const crossedTop = player.vy >= 0 && oldBottom <= p.y + 8 && newBottom >= p.y;
+                const crossedBottom = isSolidStructure(p) && player.vy < 0 && oldY >= p.y + p.h - 8 && player.y <= p.y + p.h;
 
                 if (horizontalOverlap && crossedTop) {
                     player.y = p.y - player.height;
@@ -1094,6 +1120,9 @@ export function createWaterFestivalGame({
                     player.canDoubleJump = true;
                     player.hasDoubleJumped = false;
                     player.canDash = true;
+                    player.vy = 0;
+                } else if (horizontalOverlap && crossedBottom) {
+                    player.y = p.y + p.h;
                     player.vy = 0;
                 }
             }
@@ -1111,12 +1140,21 @@ export function createWaterFestivalGame({
             // 급류/수렁 피격 시 세이프 복귀
             for (const hz of hazards) {
                 if (checkCollision({ x: player.x, y: player.y, w: player.width, h: player.height }, hz)) {
-                    createCollectParticles(player.x + player.width/2, player.y + player.height/2, '#ef4444');
-                    player.x = 100;
-                    player.y = 800;
-                    player.vx = 0;
-                    player.vy = 0;
+                    respawnPlayer();
+                    return;
                 }
+            }
+
+            for (const pit of pitDeathZones) {
+                if (checkCollision({ x: player.x, y: player.y, w: player.width, h: player.height }, pit)) {
+                    respawnPlayer();
+                    return;
+                }
+            }
+
+            if (!Number.isFinite(player.x) || !Number.isFinite(player.y) || player.y > levelHeight + 40) {
+                respawnPlayer();
+                return;
             }
 
             // 보물 획득 체크
@@ -1139,12 +1177,8 @@ export function createWaterFestivalGame({
 
             // 충돌 영역을 빠르게 통과하거나 맵 끝 고랑 아래로 떨어져도 반드시 낙사 처리합니다.
             if (player.y + player.height >= levelHeight - 2) {
-                createCollectParticles(player.x + player.width / 2, levelHeight - 20, '#ef4444');
-                player.x = 100;
-                player.y = 800;
-                player.vx = 0;
-                player.vy = 0;
-                player.isGrounded = false;
+                respawnPlayer();
+                return;
             }
 
             // 축제 아치 도달 시 다음 스테이지 이동 또는 클리어
@@ -1774,6 +1808,7 @@ export function createWaterFestivalGame({
             shootForward,
             shootDown,
             closeTreasurePopup,
+            getPlayerNickname: () => playerNickname,
             destroy() {
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
