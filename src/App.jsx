@@ -34,6 +34,7 @@ function App() {
   const gameRef = useRef(null);
   const [playMode, setPlayMode] = useState(null);
   const [selectedModeIndex, setSelectedModeIndex] = useState(0);
+  const [nickname, setNickname] = useState(() => localStorage.getItem('waterfestival-player-name') ?? '');
   const [gameState, setGameState] = useState('START');
   const [stageBadge, setStageBadge] = useState(INITIAL_STAGE_BADGE);
   const [transitionMessage, setTransitionMessage] = useState('천관산의 가을 억새 보물을 모두 찾았습니다!');
@@ -76,6 +77,15 @@ function App() {
   }, [treasurePopup]);
 
   const selectedMode = PLAY_MODES[selectedModeIndex];
+  const cleanNickname = nickname.trim().replace(/\s+/g, ' ').slice(0, 12);
+  const nicknameReady = cleanNickname.length > 0;
+
+  const chooseSelectedMode = () => {
+    if (!nicknameReady) return;
+    localStorage.setItem('waterfestival-player-name', cleanNickname);
+    setNickname(cleanNickname);
+    setPlayMode(selectedMode.id);
+  };
 
   const requestMobileLandscape = async () => {
     if (playMode !== 'mobile') return;
@@ -93,12 +103,12 @@ function App() {
 
   const startGame = async () => {
     await requestMobileLandscape();
-    gameRef.current?.start();
+    gameRef.current?.start({ nickname: cleanNickname });
   };
 
   const restartGame = async () => {
     await requestMobileLandscape();
-    gameRef.current?.restart();
+    gameRef.current?.restart({ nickname: cleanNickname });
   };
 
   const closeTreasurePopup = () => {
@@ -154,23 +164,36 @@ function App() {
               <p className="pixel-eyebrow">SELECT PLAY STYLE</p>
               <div className="overlay-title logo-title">대모험! 장흥 9경9미9품 투어</div>
               <p className="overlay-copy compact">플레이 환경에 맞춰 조작 방식을 선택하세요.</p>
+              <label className="nickname-field">
+                <span>닉네임</span>
+                <input
+                  value={nickname}
+                  maxLength={12}
+                  autoComplete="nickname"
+                  placeholder="1~12글자로 입력"
+                  onChange={(event) => setNickname(event.target.value)}
+                />
+                <small>{cleanNickname.length}/12</small>
+              </label>
               <div className="mode-carousel" aria-label="플레이 버전 선택">
                 <button className="mode-arrow" type="button" aria-label="이전 버전" onClick={() => setSelectedModeIndex((selectedModeIndex + 1) % PLAY_MODES.length)}>◀</button>
-                <button className={`mode-card selected ${selectedMode.id === 'mobile' ? 'cyan' : ''}`} type="button" onClick={() => setPlayMode(selectedMode.id)}>
+                <button className={`mode-card selected ${selectedMode.id === 'mobile' ? 'cyan' : ''}`} type="button" onClick={chooseSelectedMode} disabled={!nicknameReady}>
                   <span className="mode-icon">{selectedMode.icon}</span>
                   <strong>{selectedMode.label}</strong>
                   <small>{selectedMode.description}</small>
                 </button>
                 <button className="mode-arrow" type="button" aria-label="다음 버전" onClick={() => setSelectedModeIndex((selectedModeIndex + 1) % PLAY_MODES.length)}>▶</button>
               </div>
-              <button className="primary-button" type="button" onClick={() => setPlayMode(selectedMode.id)}>{selectedMode.label}으로 시작</button>
+              <button className="primary-button" type="button" onClick={chooseSelectedMode} disabled={!nicknameReady}>
+                {nicknameReady ? `${selectedMode.label}으로 시작` : '닉네임을 입력하세요'}
+              </button>
             </div>
           )}
 
           {playMode && gameState === 'START' && (
             <div className="overlay overlay-start">
               <p className="pixel-eyebrow">{playMode === 'mobile' ? 'MOBILE PAD READY' : 'KEYBOARD READY'}</p>
-              <div className="overlay-title">장흥 탐험기: 27개의 보물</div>
+              <div className="overlay-title">{cleanNickname}의 장흥 탐험기</div>
               <p className="overlay-kicker">각 스테이지에 흩어진 9개의 보물을 획득하세요.</p>
               <div className="start-grid">
                 <div>
