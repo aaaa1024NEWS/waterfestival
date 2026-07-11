@@ -1,50 +1,44 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createWaterFestivalGame } from './gameEngine';
-import { fetchLeaderboard, saveLeaderboardEntry } from './lib/leaderboard';
-import { isSupabaseConfigured } from './lib/supabaseClient';
 
 const INITIAL_STAGE_BADGE = {
   label: 'STAGE 1 : 천관산 억새밭',
   color: '#f59e0b'
 };
 
+const TREASURE_COLUMNS = [
+  {
+    title: '1단계: 천관산',
+    tone: 'autumn',
+    items: ['9품 표고버섯', '9품 청태전', '9경 우드랜드', '9경 천관산', '9경 제암산', '9경 보림사', '9품 헛개나무', '9미 황칠백숙', '9품 아르미쌀']
+  },
+  {
+    title: '2단계: 토요시장',
+    tone: 'market',
+    items: ['9품 육포', '9미 한우삼합', '9미 키조개요리', '9미 바지락회무침', '9미 석화', '9미 갑오징어회먹찜', '9품 장흥무산김', '9품 낙지', '9미 갯장어샤브샤브']
+  },
+  {
+    title: '3단계: 물축제',
+    tone: 'water',
+    items: ['9경 탐진강', '9품 매생이', '9미 매생이탕', '9미 된장물회', '9경 전망대', '9경 소등섬', '9경 선학동마을', '9품 황칠나무', '9경 토요시장']
+  }
+];
+
 const PLAY_MODES = [
   { id: 'pc', icon: 'PC', label: 'PC 버전', description: '키보드와 마우스로 정교하게 플레이' },
   { id: 'mobile', icon: 'M', label: '모바일 버전', description: '가상 패드와 액션 버튼으로 플레이' }
 ];
-
-const EMPTY_RUN_STATS = {
-  currentStage: 1,
-  stageTimes: [0, 0, 0],
-  totalTime: 0
-};
-
-function formatDuration(milliseconds = 0) {
-  const totalCentiseconds = Math.max(0, Math.floor(milliseconds / 10));
-  const minutes = Math.floor(totalCentiseconds / 6000);
-  const seconds = Math.floor((totalCentiseconds % 6000) / 100);
-  const centiseconds = totalCentiseconds % 100;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
-}
 
 function App() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
   const [playMode, setPlayMode] = useState(null);
   const [selectedModeIndex, setSelectedModeIndex] = useState(0);
-  const [nickname, setNickname] = useState(() => localStorage.getItem('waterfestival-nickname') ?? '');
   const [gameState, setGameState] = useState('START');
   const [stageBadge, setStageBadge] = useState(INITIAL_STAGE_BADGE);
   const [transitionMessage, setTransitionMessage] = useState('천관산의 가을 억새 보물을 모두 찾았습니다!');
   const [treasurePopup, setTreasurePopup] = useState(null);
   const [popupCanClose, setPopupCanClose] = useState(false);
-  const [runStats, setRunStats] = useState(EMPTY_RUN_STATS);
-  const [completedRun, setCompletedRun] = useState(null);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [leaderboardStatus, setLeaderboardStatus] = useState('loading');
-
-  const cleanNickname = nickname.trim().replace(/\s+/g, ' ').slice(0, 12);
-  const nicknameReady = cleanNickname.length >= 1;
 
   useEffect(() => {
     const prefersMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
@@ -59,33 +53,13 @@ function App() {
       onGameStateChange: setGameState,
       onStageChange: setStageBadge,
       onTransitionMessageChange: setTransitionMessage,
-      onTreasurePopupChange: setTreasurePopup,
-      onRunStatsChange: setRunStats,
-      onRunComplete: setCompletedRun
+      onTreasurePopupChange: setTreasurePopup
     });
 
     gameRef.current = engine;
     return () => {
       engine.destroy();
       gameRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLeaderboardStatus('loading');
-    fetchLeaderboard()
-      .then((rows) => {
-        if (!cancelled) {
-          setLeaderboard(rows);
-          setLeaderboardStatus('ready');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLeaderboardStatus('error');
-      });
-    return () => {
-      cancelled = true;
     };
   }, []);
 
@@ -101,53 +75,14 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [treasurePopup]);
 
-  useEffect(() => {
-    if (!completedRun) return;
-
-    let cancelled = false;
-    const entry = {
-      nickname: completedRun.nickname,
-      play_mode: completedRun.playMode,
-      stage1_ms: completedRun.stageTimes[0],
-      stage2_ms: completedRun.stageTimes[1],
-      stage3_ms: completedRun.stageTimes[2],
-      total_ms: completedRun.totalTime
-    };
-
-    setLeaderboardStatus('saving');
-    saveLeaderboardEntry(entry)
-      .then(() => fetchLeaderboard())
-      .then((rows) => {
-        if (!cancelled) {
-          setLeaderboard(rows);
-          setLeaderboardStatus('ready');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLeaderboardStatus('error');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [completedRun]);
-
   const selectedMode = PLAY_MODES[selectedModeIndex];
-  const currentStageTime = runStats.stageTimes[runStats.currentStage - 1] ?? 0;
-  const completedRanking = useMemo(() => {
-    if (!completedRun) return null;
-    const index = leaderboard.findIndex(
-      (row) => row.nickname === completedRun.nickname && Math.abs(row.total_ms - completedRun.totalTime) < 100
-    );
-    return index >= 0 ? index + 1 : null;
-  }, [completedRun, leaderboard]);
 
   const requestMobileLandscape = async () => {
     if (playMode !== 'mobile') return;
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
     } catch {
-      // Fullscreen and orientation lock availability differs by mobile browser.
+      // Fullscreen support differs by mobile browser.
     }
     try {
       await window.screen?.orientation?.lock?.('landscape');
@@ -156,24 +91,14 @@ function App() {
     }
   };
 
-  const chooseSelectedMode = () => {
-    if (!nicknameReady) return;
-    localStorage.setItem('waterfestival-nickname', cleanNickname);
-    setNickname(cleanNickname);
-    setPlayMode(selectedMode.id);
-  };
-
   const startGame = async () => {
-    if (!nicknameReady || !playMode) return;
-    setCompletedRun(null);
     await requestMobileLandscape();
-    gameRef.current?.start({ nickname: cleanNickname, playMode });
+    gameRef.current?.start();
   };
 
   const restartGame = async () => {
-    setCompletedRun(null);
     await requestMobileLandscape();
-    gameRef.current?.restart({ nickname: cleanNickname, playMode });
+    gameRef.current?.restart();
   };
 
   const closeTreasurePopup = () => {
@@ -224,51 +149,29 @@ function App() {
         <div className="canvas-frame">
           <canvas ref={canvasRef} width="1920" height="1080" tabIndex="0" />
 
-          {playMode && gameState !== 'START' && (
-            <div className="game-timer" aria-live="off">
-              <span>STAGE {runStats.currentStage}</span>
-              <strong>{formatDuration(currentStageTime)}</strong>
-              <span>TOTAL</span>
-              <strong>{formatDuration(runStats.totalTime)}</strong>
-            </div>
-          )}
-
           {!playMode && (
             <div className="overlay overlay-start retro-screen">
-              <p className="pixel-eyebrow">PLAYER SETUP</p>
+              <p className="pixel-eyebrow">SELECT PLAY STYLE</p>
               <div className="overlay-title logo-title">대모험! 장흥 9경9미9품 투어</div>
-              <div className="player-setup">
-                <label htmlFor="nickname">닉네임</label>
-                <input
-                  id="nickname"
-                  value={nickname}
-                  maxLength={12}
-                  autoComplete="nickname"
-                  placeholder="1~12글자로 입력"
-                  onChange={(event) => setNickname(event.target.value)}
-                />
-                <small>{cleanNickname.length}/12</small>
-              </div>
+              <p className="overlay-copy compact">플레이 환경에 맞춰 조작 방식을 선택하세요.</p>
               <div className="mode-carousel" aria-label="플레이 버전 선택">
                 <button className="mode-arrow" type="button" aria-label="이전 버전" onClick={() => setSelectedModeIndex((selectedModeIndex + 1) % PLAY_MODES.length)}>◀</button>
-                <button className={`mode-card selected ${selectedMode.id === 'mobile' ? 'cyan' : ''}`} type="button" onClick={chooseSelectedMode} disabled={!nicknameReady}>
+                <button className={`mode-card selected ${selectedMode.id === 'mobile' ? 'cyan' : ''}`} type="button" onClick={() => setPlayMode(selectedMode.id)}>
                   <span className="mode-icon">{selectedMode.icon}</span>
                   <strong>{selectedMode.label}</strong>
                   <small>{selectedMode.description}</small>
                 </button>
                 <button className="mode-arrow" type="button" aria-label="다음 버전" onClick={() => setSelectedModeIndex((selectedModeIndex + 1) % PLAY_MODES.length)}>▶</button>
               </div>
-              <button className="primary-button" type="button" onClick={chooseSelectedMode} disabled={!nicknameReady}>
-                {nicknameReady ? `${selectedMode.label} 선택` : '닉네임을 입력하세요'}
-              </button>
+              <button className="primary-button" type="button" onClick={() => setPlayMode(selectedMode.id)}>{selectedMode.label}으로 시작</button>
             </div>
           )}
 
           {playMode && gameState === 'START' && (
             <div className="overlay overlay-start">
               <p className="pixel-eyebrow">{playMode === 'mobile' ? 'MOBILE PAD READY' : 'KEYBOARD READY'}</p>
-              <div className="overlay-title">{cleanNickname}의 장흥 탐험</div>
-              <p className="overlay-kicker">보물 팝업을 읽는 동안 초시계는 자동으로 멈춥니다.</p>
+              <div className="overlay-title">장흥 탐험기: 27개의 보물</div>
+              <p className="overlay-kicker">각 스테이지에 흩어진 9개의 보물을 획득하세요.</p>
               <div className="start-grid">
                 <div>
                   <h2>조작법</h2>
@@ -278,7 +181,7 @@ function App() {
               </div>
               <div className="button-row">
                 <button className="primary-button" type="button" onClick={startGame}>게임 시작</button>
-                <button className="ghost-button" type="button" onClick={() => setPlayMode(null)}>닉네임·버전 변경</button>
+                <button className="ghost-button" type="button" onClick={() => setPlayMode(null)}>버전 다시 선택</button>
               </div>
             </div>
           )}
@@ -288,7 +191,6 @@ function App() {
               <p className="pixel-eyebrow">AREA COMPLETE</p>
               <div className="overlay-title">STAGE CLEAR!</div>
               <p className="transition-message">{transitionMessage}</p>
-              <div className="stage-result-time">스테이지 기록 <strong>{formatDuration(runStats.stageTimes[runStats.currentStage - 1])}</strong></div>
               <button className="secondary-button" type="button" onClick={() => gameRef.current?.nextStage()}>다음 스테이지 출발</button>
             </div>
           )}
@@ -297,22 +199,14 @@ function App() {
             <div className="overlay overlay-clear">
               <p className="pixel-eyebrow">QUEST COMPLETE</p>
               <div className="overlay-title">27대 보물 마스터!</div>
-              <div className="run-summary">
-                {runStats.stageTimes.map((time, index) => <div key={index}><span>STAGE {index + 1}</span><strong>{formatDuration(time)}</strong></div>)}
-                <div className="total"><span>TOTAL</span><strong>{formatDuration(runStats.totalTime)}</strong></div>
+              <div className="treasure-grid">
+                {TREASURE_COLUMNS.map((column) => (
+                  <section className={`treasure-column ${column.tone}`} key={column.title}>
+                    <h2>{column.title}</h2>
+                    {column.items.map((item) => <p key={item}>{item}</p>)}
+                  </section>
+                ))}
               </div>
-              <section className="leaderboard-panel" aria-label="리더보드">
-                <div className="leaderboard-heading"><h2>TOP 10 LEADERBOARD</h2>{completedRanking && <span>현재 {completedRanking}위</span>}</div>
-                <div className="leaderboard-list">
-                  {leaderboard.map((row, index) => (
-                    <div className="leaderboard-row" key={row.id}>
-                      <span className="rank">{index + 1}</span><strong>{row.nickname}</strong><span>{row.play_mode === 'mobile' ? 'M' : 'PC'}</span><time>{formatDuration(row.total_ms)}</time>
-                    </div>
-                  ))}
-                  {leaderboard.length === 0 && <p>{leaderboardStatus === 'loading' || leaderboardStatus === 'saving' ? '기록을 불러오는 중입니다.' : '첫 기록의 주인공이 되어 보세요.'}</p>}
-                </div>
-              </section>
-              {leaderboardStatus === 'error' && <p className="leaderboard-error">온라인 순위 저장에 실패했습니다. Supabase 설정을 확인해 주세요.</p>}
               <button className="success-button" type="button" onClick={restartGame}>처음부터 다시하기</button>
             </div>
           )}
@@ -331,7 +225,7 @@ function App() {
                   </div>
                 </div>
                 <footer>
-                  {popupCanClose ? <button type="button" onClick={closeTreasurePopup}>창 닫기</button> : <p>보물 설명을 읽어보세요. 3초 뒤 닫기 버튼이 나타납니다.</p>}
+                  {popupCanClose ? <button type="button" onClick={closeTreasurePopup}>닫기</button> : <p>보물 설명을 읽어보세요. 3초 뒤 닫기 버튼이 나타납니다.</p>}
                 </footer>
               </article>
             </div>
@@ -354,7 +248,6 @@ function App() {
 
         <footer className="game-footer">
           <p>{playMode === 'mobile' ? '모바일 버전에서는 화면을 가로로 돌리면 가장 편하게 플레이할 수 있습니다.' : 'PC 버전에서는 게임 화면을 클릭하면 조작 초점이 돌아옵니다.'}</p>
-          <p>리더보드 저장: <strong className={isSupabaseConfigured ? 'status-ready' : 'status-waiting'}>{isSupabaseConfigured ? 'Supabase 온라인 연결됨' : '이 기기에 임시 저장 중'}</strong></p>
         </footer>
       </section>
     </main>
