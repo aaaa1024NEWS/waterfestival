@@ -205,9 +205,7 @@ export function createWaterFestivalGame({
     onGameStateChange = () => {},
     onStageChange = () => {},
     onTransitionMessageChange = () => {},
-    onTreasurePopupChange = () => {},
-    onRunStatsChange = () => {},
-    onRunComplete = () => {}
+    onTreasurePopupChange = () => {}
 }) {
     if (!canvas) {
         throw new Error('Canvas element is required.');
@@ -539,10 +537,6 @@ export function createWaterFestivalGame({
         // 게임 상태 관리
         let gameState = 'START'; // START, PLAYING, TRANSITION, CLEAR
         let currentStage = 1; // 1, 2, 3
-        let runMetadata = {};
-        let runStats = { stageTimes: [0, 0, 0], totalTime: 0 };
-        let lastFrameTime = performance.now();
-        let lastStatsNotify = 0;
         // 카메라 시점 줌인 배율
         const zoom = 1.6;
 
@@ -828,33 +822,18 @@ export function createWaterFestivalGame({
             notifyStage();
         }
 
-        function notifyRunStats(force = false) {
-            const now = performance.now();
-            if (!force && now - lastStatsNotify < 100) return;
-            lastStatsNotify = now;
-            onRunStatsChange({
-                currentStage,
-                stageTimes: [...runStats.stageTimes],
-                totalTime: runStats.totalTime
-            });
-        }
-
         // 포커스 획득 보조 유틸 함수 (이프레임 제약 돌파용)
         function forceFocusOnGame() {
             canvas.focus();
             window.focus();
         }
-        function startGame(metadata = {}) {
+        function startGame() {
             gameState = 'PLAYING';
             currentStage = 1;
-            runMetadata = metadata;
-            runStats = { stageTimes: [0, 0, 0], totalTime: 0 };
             treasurePopup = null;
             onTreasurePopupChange(null);
-            lastFrameTime = performance.now();
             setupStage();
             notifyGameState();
-            notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
         }
 
@@ -1179,12 +1158,6 @@ export function createWaterFestivalGame({
                     } else {
                         gameState = 'CLEAR';
                         notifyGameState();
-                        notifyRunStats(true);
-                        onRunComplete({
-                            ...runMetadata,
-                            stageTimes: [...runStats.stageTimes],
-                            totalTime: runStats.totalTime
-                        });
                     }
                 } else {
                     player.vx = -4; // 보물이 전부 없을 시 입장 튕김
@@ -1661,14 +1634,7 @@ export function createWaterFestivalGame({
         }
         let animationFrameId = null;
 
-        function gameLoop(frameTime = performance.now()) {
-            const frameDelta = Math.min(100, Math.max(0, frameTime - lastFrameTime));
-            lastFrameTime = frameTime;
-            if (gameState === 'PLAYING' && !treasurePopup) {
-                runStats.stageTimes[currentStage - 1] += frameDelta;
-                runStats.totalTime += frameDelta;
-                notifyRunStats();
-            }
+        function gameLoop() {
             update();
             draw();
             animationFrameId = requestAnimationFrame(gameLoop);
@@ -1729,10 +1695,8 @@ export function createWaterFestivalGame({
 
             currentStage++;
             gameState = 'PLAYING';
-            lastFrameTime = performance.now();
             setupStage();
             notifyGameState();
-            notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
         }
 
