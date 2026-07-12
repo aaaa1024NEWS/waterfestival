@@ -81,15 +81,35 @@ export async function completeLeaderboardRun(id, record) {
   }
 
   const normalized = createRunRecord(record);
+  const { data: progress, error: progressError } = await supabase
+    .from(LEADERBOARD_TABLE)
+    .select('stage1_ms, stage2_ms, stage3_ms, total_ms')
+    .eq('id', id)
+    .single();
+
+  if (progressError) throw progressError;
+
+  // Preserve stage values already written at stage boundaries if the final callback races a UI update.
+  const stageTimes = [
+    Math.max(normalized.stage1Ms, Number(progress.stage1_ms) || 0),
+    Math.max(normalized.stage2Ms, Number(progress.stage2_ms) || 0),
+    Math.max(normalized.stage3Ms, Number(progress.stage3_ms) || 0)
+  ];
+  const totalMs = Math.max(
+    normalized.totalMs,
+    Number(progress.total_ms) || 0,
+    stageTimes.reduce((sum, time) => sum + time, 0)
+  );
+
   const { data, error } = await supabase
     .from(LEADERBOARD_TABLE)
     .update({
       nickname: normalized.nickname,
       play_mode: normalized.playMode,
-      stage1_ms: normalized.stage1Ms,
-      stage2_ms: normalized.stage2Ms,
-      stage3_ms: normalized.stage3Ms,
-      total_ms: normalized.totalMs,
+      stage1_ms: stageTimes[0],
+      stage2_ms: stageTimes[1],
+      stage3_ms: stageTimes[2],
+      total_ms: totalMs,
       completed: true,
       completed_at: new Date().toISOString()
     })
@@ -110,6 +130,7 @@ export async function fetchLeaderboard(limit = 20) {
     .from(LEADERBOARD_TABLE)
     .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at')
     .eq('completed', true)
+    .gt('total_ms', 0)
     .order('total_ms', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(limit);

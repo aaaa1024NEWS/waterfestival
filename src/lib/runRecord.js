@@ -2,17 +2,26 @@
 export function createRunRecord({
   nickname = '',
   playMode = 'pc',
-  stageTimes = [0, 0, 0],
-  totalTime = 0,
+  stageTimes,
+  totalTime,
+  stage1Ms,
+  stage2Ms,
+  stage3Ms,
+  totalMs,
   createdAt = new Date().toISOString()
 } = {}) {
+  const normalizedStageTimes = Array.isArray(stageTimes)
+    ? stageTimes
+    : [stage1Ms, stage2Ms, stage3Ms];
+  const normalizedTotalTime = totalTime ?? totalMs;
+
   return {
     nickname: String(nickname).trim().slice(0, 12),
     playMode: playMode === 'mobile' ? 'mobile' : 'pc',
-    stage1Ms: Math.max(0, Math.round(Number(stageTimes[0]) || 0)),
-    stage2Ms: Math.max(0, Math.round(Number(stageTimes[1]) || 0)),
-    stage3Ms: Math.max(0, Math.round(Number(stageTimes[2]) || 0)),
-    totalMs: Math.max(0, Math.round(Number(totalTime) || 0)),
+    stage1Ms: Math.max(0, Math.round(Number(normalizedStageTimes[0]) || 0)),
+    stage2Ms: Math.max(0, Math.round(Number(normalizedStageTimes[1]) || 0)),
+    stage3Ms: Math.max(0, Math.round(Number(normalizedStageTimes[2]) || 0)),
+    totalMs: Math.max(0, Math.round(Number(normalizedTotalTime) || 0)),
     createdAt
   };
 }

@@ -1164,27 +1164,46 @@ export function createWaterFestivalGame({
 
         function finalizeCurrentStageTime() {
             const stageIndex = currentStage - 1;
-            if (runStats.stageTimes[stageIndex] <= 0) {
+            if (!Number.isFinite(runStats.stageTimes[stageIndex]) || runStats.stageTimes[stageIndex] <= 0) {
                 runStats.stageTimes[stageIndex] = Math.max(100, performance.now() - stageStartedAt);
             }
 
-            const measuredTotal = runStats.stageTimes.reduce((sum, time) => sum + time, 0);
-            runStats.totalTime = Math.max(runStats.totalTime, measuredTotal);
+            const measuredTotal = runStats.stageTimes.reduce(
+                (sum, time) => sum + (Number.isFinite(time) && time > 0 ? time : 0),
+                0
+            );
+            runStats.totalTime = Math.max(
+                Number.isFinite(runStats.totalTime) ? runStats.totalTime : 0,
+                measuredTotal
+            );
         }
 
         function finalizeRunTimes() {
             finalizeCurrentStageTime();
 
-            const missingStages = runStats.stageTimes.filter(time => time <= 0).length;
-            if (missingStages === 0) return;
+            const hasValidTime = (time) => Number.isFinite(time) && time > 0;
+            const missingStages = runStats.stageTimes.filter(time => !hasValidTime(time)).length;
+            if (missingStages === 0) {
+                runStats.stageTimes = runStats.stageTimes.map(time => Math.max(100, Math.round(time)));
+                runStats.totalTime = Math.max(
+                    100,
+                    Math.round(Number(runStats.totalTime) || 0),
+                    runStats.stageTimes.reduce((sum, time) => sum + time, 0)
+                );
+                return;
+            }
 
-            const knownTotal = runStats.stageTimes.reduce((sum, time) => sum + Math.max(0, time), 0);
+            const knownTotal = runStats.stageTimes.reduce((sum, time) => sum + (hasValidTime(time) ? time : 0), 0);
             const wallClockTotal = Math.max(100, performance.now() - runStartedAt);
-            const targetTotal = Math.max(runStats.totalTime, wallClockTotal, knownTotal + missingStages * 100);
+            const targetTotal = Math.max(
+                Number.isFinite(runStats.totalTime) ? runStats.totalTime : 0,
+                wallClockTotal,
+                knownTotal + missingStages * 100
+            );
             const remainingTotal = Math.max(missingStages * 100, targetTotal - knownTotal);
             const fallbackStageTime = Math.max(100, Math.round(remainingTotal / missingStages));
 
-            runStats.stageTimes = runStats.stageTimes.map(time => time > 0 ? time : fallbackStageTime);
+            runStats.stageTimes = runStats.stageTimes.map(time => hasValidTime(time) ? Math.max(100, Math.round(time)) : fallbackStageTime);
             runStats.totalTime = Math.max(targetTotal, runStats.stageTimes.reduce((sum, time) => sum + time, 0));
         }
 
@@ -2038,7 +2057,10 @@ export function createWaterFestivalGame({
         let animationFrameId = null;
 
         function gameLoop(frameTime = performance.now()) {
-            const frameDelta = Math.min(100, Math.max(0, frameTime - lastFrameTime));
+            const rawFrameDelta = frameTime - lastFrameTime;
+            const frameDelta = Number.isFinite(rawFrameDelta)
+                ? Math.min(100, Math.max(0, rawFrameDelta))
+                : 0;
             lastFrameTime = frameTime;
             if (gameState === 'PLAYING' && !treasurePopup) {
                 runStats.stageTimes[currentStage - 1] += frameDelta;
