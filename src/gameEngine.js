@@ -207,6 +207,7 @@ export function createWaterFestivalGame({
     onTransitionMessageChange = () => {},
     onTreasurePopupChange = () => {},
     onRunStatsChange = () => {},
+    onStageTimeSaved = () => {},
     onRunComplete = () => {}
 }) {
     if (!canvas) {
@@ -1547,6 +1548,10 @@ export function createWaterFestivalGame({
                     } else {
                         gameState = 'CLEAR';
                         finalizeRunTimes();
+                        onStageTimeSaved({
+                            stage: currentStage,
+                            stageTimes: [...runStats.stageTimes]
+                        });
                         stopBackgroundMusic();
                         notifyGameState();
                         notifyRunStats(true);
@@ -2100,6 +2105,10 @@ export function createWaterFestivalGame({
             if (currentStage >= 3) return;
 
             finalizeCurrentStageTime();
+            onStageTimeSaved({
+                stage: currentStage,
+                stageTimes: [...runStats.stageTimes]
+            });
             currentStage++;
             gameState = 'PLAYING';
             runStats.currentStage = currentStage;

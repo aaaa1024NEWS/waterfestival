@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createWaterFestivalGame } from './gameEngine';
 import { createRunRecord } from './lib/runRecord';
-import { fetchLeaderboard, getLeaderboardStatus, saveLeaderboardRecord } from './lib/leaderboard';
+import {
+  completeLeaderboardRun,
+  fetchLeaderboard,
+  getLeaderboardStatus,
+  saveLeaderboardRecord,
+  saveLeaderboardStageProgress,
+  startLeaderboardRun
+} from './lib/leaderboard';
 
 const INITIAL_STAGE_BADGE = {
   label: 'STAGE 1 : 천관산 억새밭',
@@ -45,6 +52,11 @@ function formatDuration(milliseconds = 0) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
 }
 
+function createClientRunId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function App() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
@@ -62,7 +74,8 @@ function App() {
   const [leaderboardRows, setLeaderboardRows] = useState([]);
   const [leaderboardState, setLeaderboardState] = useState('idle');
   const [runSaveState, setRunSaveState] = useState('idle');
-  const savedRunKeyRef = useRef(null);
+  const runProgressRef = useRef(null);
+  const runProgressWriteRef = useRef(Promise.resolve());
 
   useEffect(() => {
     const prefersMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
@@ -79,7 +92,40 @@ function App() {
       onTransitionMessageChange: setTransitionMessage,
       onTreasurePopupChange: setTreasurePopup,
       onRunStatsChange: setRunStats,
-      onRunComplete: (record) => setLastRun(createRunRecord(record))
+      onStageTimeSaved: ({ stageTimes }) => {
+        const progress = runProgressRef.current;
+        if (!progress?.id) return;
+
+        runProgressWriteRef.current = runProgressWriteRef.current
+          .then(() => saveLeaderboardStageProgress(progress.id, stageTimes))
+          .catch(() => ({ saved: false, reason: 'error' }));
+      },
+      onRunComplete: (record) => {
+        const normalized = createRunRecord(record);
+        const progress = runProgressRef.current;
+        setLastRun(normalized);
+        setRunSaveState('saving');
+
+        const finalSave = runProgressWriteRef.current.then(() => (
+          progress?.id
+            ? completeLeaderboardRun(progress.id, normalized)
+            : saveLeaderboardRecord(normalized)
+        ));
+
+        runProgressWriteRef.current = finalSave;
+        finalSave
+          .then(({ record: savedRecord, saved, reason }) => {
+            if (!saved) {
+              setRunSaveState(reason === 'not-configured' ? 'not-configured' : 'error');
+              return;
+            }
+            setRunSaveState('saved');
+            setLeaderboardRows((rows) => [savedRecord, ...rows]
+              .sort((a, b) => a.totalMs - b.totalMs)
+              .slice(0, 20));
+          })
+          .catch(() => setRunSaveState('error'));
+      }
     });
 
     gameRef.current = engine;
@@ -100,34 +146,6 @@ function App() {
     const timer = window.setTimeout(() => setPopupCanClose(true), delay);
     return () => window.clearTimeout(timer);
   }, [treasurePopup]);
-
-  useEffect(() => {
-    if (gameState !== 'CLEAR' || !lastRun) return undefined;
-
-    const runKey = `${lastRun.nickname}-${lastRun.createdAt}-${lastRun.totalMs}`;
-    if (savedRunKeyRef.current === runKey) return undefined;
-    savedRunKeyRef.current = runKey;
-    let cancelled = false;
-
-    setRunSaveState('saving');
-    saveLeaderboardRecord(lastRun)
-      .then(async ({ record, saved, reason }) => {
-        if (cancelled) return;
-        if (!saved) {
-          setRunSaveState(reason === 'not-configured' ? 'not-configured' : 'error');
-          return;
-        }
-        setRunSaveState('saved');
-        setLeaderboardRows((rows) => [record, ...rows].sort((a, b) => a.totalMs - b.totalMs).slice(0, 20));
-      })
-      .catch(() => {
-        if (!cancelled) setRunSaveState('error');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [gameState, lastRun]);
 
   const selectedMode = PLAY_MODES[selectedModeIndex];
   const cleanNickname = nickname.trim().replace(/\s+/g, ' ').slice(0, 12);
@@ -169,15 +187,21 @@ function App() {
   const startGame = async () => {
     setLastRun(null);
     setRunSaveState('idle');
+    const runId = createClientRunId();
+    runProgressRef.current = { id: null, runId };
+    runProgressWriteRef.current = Promise.resolve();
     await requestMobileLandscape();
-    gameRef.current?.start({ nickname: cleanNickname, playMode });
+    try {
+      const progress = await startLeaderboardRun({ runId, nickname: cleanNickname, playMode });
+      runProgressRef.current = { ...runProgressRef.current, ...progress };
+    } catch {
+      runProgressRef.current = { id: null, runId, saved: false };
+    }
+    gameRef.current?.start({ nickname: cleanNickname, playMode, runId });
   };
 
   const restartGame = async () => {
-    setLastRun(null);
-    setRunSaveState('idle');
-    await requestMobileLandscape();
-    gameRef.current?.restart({ nickname: cleanNickname, playMode });
+    await startGame();
   };
 
   const closeTreasurePopup = () => {
