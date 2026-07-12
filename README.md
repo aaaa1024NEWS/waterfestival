@@ -35,6 +35,20 @@ Vercel에서 이 저장소를 연결하면 `vercel.json` 기준으로 다음 설
 ```bash
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+## Supabase 리더보드 설정
+
+1. Supabase 대시보드의 SQL Editor에서 `supabase/schema.sql` 전체를 실행합니다.
+2. Vercel 프로젝트의 Settings > Environment Variables에 아래 두 값을 Production, Preview, Development에 등록합니다.
+
+```text
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+3. `main` 브랜치에 푸시하면 새 배포에서 리더보드 저장과 조회가 활성화됩니다.
+
+게임을 클리어하면 닉네임, 스테이지별 시간, 전체 시간이 `game_runs`에 저장되고 전체 시간 기준으로 빠른 기록부터 리더보드에 표시됩니다.
 ```
 
 Supabase 연결 코드는 `src/lib/supabaseClient.js`에 준비되어 있습니다.

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createWaterFestivalGame } from './gameEngine';
 import { createRunRecord } from './lib/runRecord';
+import { fetchLeaderboard, getLeaderboardStatus, saveLeaderboardRecord } from './lib/leaderboard';
 
 const INITIAL_STAGE_BADGE = {
   label: 'STAGE 1 : 천관산 억새밭',
@@ -57,6 +58,11 @@ function App() {
   const [popupCanClose, setPopupCanClose] = useState(false);
   const [runStats, setRunStats] = useState(EMPTY_RUN_STATS);
   const [lastRun, setLastRun] = useState(null);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [leaderboardRows, setLeaderboardRows] = useState([]);
+  const [leaderboardState, setLeaderboardState] = useState('idle');
+  const [runSaveState, setRunSaveState] = useState('idle');
+  const savedRunKeyRef = useRef(null);
 
   useEffect(() => {
     const prefersMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
@@ -95,6 +101,34 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [treasurePopup]);
 
+  useEffect(() => {
+    if (gameState !== 'CLEAR' || !lastRun) return undefined;
+
+    const runKey = `${lastRun.nickname}-${lastRun.createdAt}-${lastRun.totalMs}`;
+    if (savedRunKeyRef.current === runKey) return undefined;
+    savedRunKeyRef.current = runKey;
+    let cancelled = false;
+
+    setRunSaveState('saving');
+    saveLeaderboardRecord(lastRun)
+      .then(async ({ record, saved, reason }) => {
+        if (cancelled) return;
+        if (!saved) {
+          setRunSaveState(reason === 'not-configured' ? 'not-configured' : 'error');
+          return;
+        }
+        setRunSaveState('saved');
+        setLeaderboardRows((rows) => [record, ...rows].sort((a, b) => a.totalMs - b.totalMs).slice(0, 20));
+      })
+      .catch(() => {
+        if (!cancelled) setRunSaveState('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameState, lastRun]);
+
   const selectedMode = PLAY_MODES[selectedModeIndex];
   const cleanNickname = nickname.trim().replace(/\s+/g, ' ').slice(0, 12);
   const nicknameReady = cleanNickname.length > 0;
@@ -104,6 +138,18 @@ function App() {
     localStorage.setItem('waterfestival-player-name', cleanNickname);
     setNickname(cleanNickname);
     setPlayMode(selectedMode.id);
+  };
+
+  const openLeaderboard = async () => {
+    setLeaderboardOpen(true);
+    setLeaderboardState('loading');
+    try {
+      const result = await fetchLeaderboard();
+      setLeaderboardRows(result.records);
+      setLeaderboardState(result.available ? 'ready' : 'not-configured');
+    } catch {
+      setLeaderboardState('error');
+    }
   };
 
   const requestMobileLandscape = async () => {
@@ -122,12 +168,14 @@ function App() {
 
   const startGame = async () => {
     setLastRun(null);
+    setRunSaveState('idle');
     await requestMobileLandscape();
     gameRef.current?.start({ nickname: cleanNickname, playMode });
   };
 
   const restartGame = async () => {
     setLastRun(null);
+    setRunSaveState('idle');
     await requestMobileLandscape();
     gameRef.current?.restart({ nickname: cleanNickname, playMode });
   };
@@ -217,6 +265,46 @@ function App() {
               <button className="primary-button" type="button" onClick={chooseSelectedMode} disabled={!nicknameReady}>
                 {nicknameReady ? `${selectedMode.label}으로 시작` : '닉네임을 입력하세요'}
               </button>
+              <button className="leaderboard-button" type="button" onClick={openLeaderboard}>
+                리더보드 보기
+              </button>
+            </div>
+          )}
+
+          {leaderboardOpen && (
+            <div className="overlay leaderboard-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title">
+              <p className="pixel-eyebrow">BEST RUNS</p>
+              <div className="overlay-title" id="leaderboard-title">리더보드</div>
+              <p className="leaderboard-caption">닉네임이 기록 앞에 표시됩니다. 전체 시간 기준으로 빠른 순서입니다.</p>
+              {leaderboardState === 'loading' && <p className="leaderboard-message">기록을 불러오는 중...</p>}
+              {leaderboardState === 'not-configured' && (
+                <p className="leaderboard-message">Supabase 환경 변수와 game_runs 테이블을 설정하면 기록이 표시됩니다.</p>
+              )}
+              {leaderboardState === 'error' && <p className="leaderboard-message">리더보드를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>}
+              {leaderboardState === 'ready' && leaderboardRows.length === 0 && (
+                <p className="leaderboard-message">아직 등록된 기록이 없습니다. 첫 기록을 남겨보세요.</p>
+              )}
+              {leaderboardRows.length > 0 && (
+                <div className="leaderboard-table" role="table" aria-label="게임 리더보드">
+                  <div className="leaderboard-row leaderboard-row--header" role="row">
+                    <span>순위</span><span>닉네임</span><span>STAGE 1</span><span>STAGE 2</span><span>STAGE 3</span><span>TOTAL</span>
+                  </div>
+                  {leaderboardRows.map((row, index) => (
+                    <div className="leaderboard-row" role="row" key={`${row.nickname}-${row.createdAt}-${index}`}>
+                      <strong>{index + 1}</strong>
+                      <strong className="leaderboard-name">{row.nickname}</strong>
+                      <span>{formatDuration(row.stage1Ms)}</span>
+                      <span>{formatDuration(row.stage2Ms)}</span>
+                      <span>{formatDuration(row.stage3Ms)}</span>
+                      <strong className="leaderboard-total">{formatDuration(row.totalMs)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="leaderboard-connection">
+                {getLeaderboardStatus() === 'ready' ? 'Supabase 연결됨' : 'Supabase 환경 변수 대기 중'}
+              </p>
+              <button className="ghost-button" type="button" onClick={() => setLeaderboardOpen(false)}>닫기</button>
             </div>
           )}
 
@@ -256,6 +344,12 @@ function App() {
                 {runStats.stageTimes.map((time, index) => <div key={index}><span>STAGE {index + 1}</span><strong>{formatDuration(time)}</strong></div>)}
                 <div className="total"><span>TOTAL</span><strong>{formatDuration(runStats.totalTime)}</strong></div>
               </div>
+              <p className={`run-save-status run-save-status--${runSaveState}`} aria-live="polite">
+                {runSaveState === 'saving' && '기록을 리더보드에 저장하는 중...'}
+                {runSaveState === 'saved' && '기록이 리더보드에 등록되었습니다.'}
+                {runSaveState === 'not-configured' && 'Supabase 설정 후 이 기록이 리더보드에 등록됩니다.'}
+                {runSaveState === 'error' && '기록 저장에 실패했습니다. Supabase 설정을 확인해주세요.'}
+              </p>
               <div className="treasure-grid">
                 {TREASURE_COLUMNS.map((column) => (
                   <section className={`treasure-column ${column.tone}`} key={column.title}>
