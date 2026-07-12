@@ -845,6 +845,7 @@ export function createWaterFestivalGame({
         let runStats = { currentStage: 1, stageTimes: [0, 0, 0], totalTime: 0 };
         let lastFrameTime = performance.now();
         let stageStartedAt = lastFrameTime;
+        let runStartedAt = lastFrameTime;
         let lastStatsNotify = 0;
         // 카메라 시점 줌인 배율
         const zoom = 1.6;
@@ -1170,6 +1171,22 @@ export function createWaterFestivalGame({
             runStats.totalTime = Math.max(runStats.totalTime, measuredTotal);
         }
 
+        function finalizeRunTimes() {
+            finalizeCurrentStageTime();
+
+            const missingStages = runStats.stageTimes.filter(time => time <= 0).length;
+            if (missingStages === 0) return;
+
+            const knownTotal = runStats.stageTimes.reduce((sum, time) => sum + Math.max(0, time), 0);
+            const wallClockTotal = Math.max(100, performance.now() - runStartedAt);
+            const targetTotal = Math.max(runStats.totalTime, wallClockTotal, knownTotal + missingStages * 100);
+            const remainingTotal = Math.max(missingStages * 100, targetTotal - knownTotal);
+            const fallbackStageTime = Math.max(100, Math.round(remainingTotal / missingStages));
+
+            runStats.stageTimes = runStats.stageTimes.map(time => time > 0 ? time : fallbackStageTime);
+            runStats.totalTime = Math.max(targetTotal, runStats.stageTimes.reduce((sum, time) => sum + time, 0));
+        }
+
         function startGame(options = {}) {
             gameState = 'PLAYING';
             currentStage = 1;
@@ -1178,6 +1195,7 @@ export function createWaterFestivalGame({
             runStats = { currentStage: 1, stageTimes: [0, 0, 0], totalTime: 0 };
             lastFrameTime = performance.now();
             stageStartedAt = lastFrameTime;
+            runStartedAt = lastFrameTime;
             treasurePopup = null;
             onTreasurePopupChange(null);
             setupStage();
@@ -1528,7 +1546,7 @@ export function createWaterFestivalGame({
                         notifyGameState();
                     } else {
                         gameState = 'CLEAR';
-                        finalizeCurrentStageTime();
+                        finalizeRunTimes();
                         stopBackgroundMusic();
                         notifyGameState();
                         notifyRunStats(true);
