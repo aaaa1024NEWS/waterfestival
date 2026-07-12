@@ -1,4 +1,5 @@
 import treasurePopupManifest from '../assets/treasure-popups/manifest.json';
+import playerSpritesheetUrl from '../assets/player/player-spritesheet.png';
 
 const stageBackgroundAssetModules = import.meta.glob('../assets/backgrounds/*.{jpg,jpeg,png,webp}', {
     eager: true,
@@ -69,6 +70,7 @@ const treasurePopupAssetModules = import.meta.glob('../assets/treasure-popups/*.
     import: 'default',
     query: '?url'
 });
+const PLAYER_SPRITE_FRAME_COUNT = 4;
 
 const treasurePopupAssets = Object.fromEntries(
     Object.entries(treasurePopupAssetModules).map(([path, url]) => [
@@ -1945,6 +1947,37 @@ export function createWaterFestivalGame({
                 ctx.scale(-1, 1);
             }
 
+            const playerSprite = getCachedImage(playerSpritesheetUrl);
+            const isWalking = player.isGrounded && Math.abs(player.vx) > 0.35;
+            const spriteFrame = player.isDashing
+                ? 2
+                : !player.isGrounded
+                    ? 3
+                    : isWalking
+                        ? 1 + Math.floor(performance.now() / 130) % 2
+                        : 0;
+
+            if (playerSprite && playerSprite.complete && playerSprite.naturalWidth > 0) {
+                const previousSmoothing = ctx.imageSmoothingEnabled;
+                const frameWidth = playerSprite.naturalWidth / PLAYER_SPRITE_FRAME_COUNT;
+                const drawWidth = 50;
+                const drawHeight = 65;
+                const drawY = player.height / 2 - drawHeight * 0.84;
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(
+                    playerSprite,
+                    Math.round(frameWidth * spriteFrame),
+                    0,
+                    Math.round(frameWidth),
+                    playerSprite.naturalHeight,
+                    Math.round(-drawWidth / 2),
+                    Math.round(drawY),
+                    drawWidth,
+                    drawHeight
+                );
+                ctx.imageSmoothingEnabled = previousSmoothing;
+            } else {
+
             // 깊은 푸른 망토
             ctx.fillStyle = hollowPalette.cloak;
             ctx.fillRect(-player.width/2 - 1, -player.height/2 + 10, player.width + 2, player.height/2 + 6);
@@ -1974,6 +2007,7 @@ export function createWaterFestivalGame({
             ctx.arc(-3.5, -6, 3, 0, Math.PI * 2);
             ctx.arc(3.5, -6, 3, 0, Math.PI * 2);
             ctx.fill();
+            }
             ctx.shadowBlur = 0;
 
             if (player.isWallSliding) {
