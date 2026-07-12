@@ -844,6 +844,7 @@ export function createWaterFestivalGame({
         let runMetadata = {};
         let runStats = { currentStage: 1, stageTimes: [0, 0, 0], totalTime: 0 };
         let lastFrameTime = performance.now();
+        let stageStartedAt = lastFrameTime;
         let lastStatsNotify = 0;
         // 카메라 시점 줌인 배율
         const zoom = 1.6;
@@ -1159,6 +1160,16 @@ export function createWaterFestivalGame({
             });
         }
 
+        function finalizeCurrentStageTime() {
+            const stageIndex = currentStage - 1;
+            if (runStats.stageTimes[stageIndex] <= 0) {
+                runStats.stageTimes[stageIndex] = Math.max(100, performance.now() - stageStartedAt);
+            }
+
+            const measuredTotal = runStats.stageTimes.reduce((sum, time) => sum + time, 0);
+            runStats.totalTime = Math.max(runStats.totalTime, measuredTotal);
+        }
+
         function startGame(options = {}) {
             gameState = 'PLAYING';
             currentStage = 1;
@@ -1166,6 +1177,7 @@ export function createWaterFestivalGame({
             runMetadata = { nickname: playerNickname, playMode: options.playMode ?? 'pc' };
             runStats = { currentStage: 1, stageTimes: [0, 0, 0], totalTime: 0 };
             lastFrameTime = performance.now();
+            stageStartedAt = lastFrameTime;
             treasurePopup = null;
             onTreasurePopupChange(null);
             setupStage();
@@ -1516,6 +1528,7 @@ export function createWaterFestivalGame({
                         notifyGameState();
                     } else {
                         gameState = 'CLEAR';
+                        finalizeCurrentStageTime();
                         stopBackgroundMusic();
                         notifyGameState();
                         notifyRunStats(true);
@@ -2068,10 +2081,12 @@ export function createWaterFestivalGame({
         function nextStage() {
             if (currentStage >= 3) return;
 
+            finalizeCurrentStageTime();
             currentStage++;
             gameState = 'PLAYING';
             runStats.currentStage = currentStage;
             lastFrameTime = performance.now();
+            stageStartedAt = lastFrameTime;
             setupStage();
             startBackgroundMusic(currentStage);
             notifyGameState();
