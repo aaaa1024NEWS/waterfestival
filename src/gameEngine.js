@@ -71,6 +71,14 @@ const treasurePopupAssetModules = import.meta.glob('../assets/treasure-popups/*.
     query: '?url'
 });
 const PLAYER_SPRITE_FRAME_COUNT = 6;
+const PLAYER_SPRITE_VISIBLE_BOUNDS = [
+    { left: 67 / 362, top: 220 / 724, right: 362 / 362, bottom: 547 / 724 },
+    { left: 0 / 362, top: 225 / 724, right: 348 / 362, bottom: 547 / 724 },
+    { left: 62 / 362, top: 224 / 724, right: 329 / 362, bottom: 547 / 724 },
+    { left: 62 / 362, top: 221 / 724, right: 362 / 362, bottom: 547 / 724 },
+    { left: 0 / 362, top: 167 / 724, right: 340 / 362, bottom: 488 / 724 },
+    { left: 13 / 362, top: 231 / 724, right: 277 / 362, bottom: 517 / 724 }
+];
 
 const treasurePopupAssets = Object.fromEntries(
     Object.entries(treasurePopupAssetModules).map(([path, url]) => [
@@ -1973,10 +1981,13 @@ export function createWaterFestivalGame({
             if (playerSprite && playerSprite.complete && playerSprite.naturalWidth > 0) {
                 const previousSmoothing = ctx.imageSmoothingEnabled;
                 const frameWidth = playerSprite.naturalWidth / PLAYER_SPRITE_FRAME_COUNT;
-                const drawWidth = 50;
-                const drawHeight = 65;
+                const drawWidth = 52;
+                const drawHeight = Math.round(drawWidth * playerSprite.naturalHeight / frameWidth);
+                const visibleBounds = PLAYER_SPRITE_VISIBLE_BOUNDS[spriteFrame];
+                const visibleCenter = (visibleBounds.left + visibleBounds.right) / 2;
+                const drawX = -drawWidth / 2 - (visibleCenter - 0.5) * drawWidth;
                 const walkBob = isWalking ? Math.sin(performance.now() / 95) * 0.8 : 0;
-                const drawY = player.height / 2 - drawHeight * 0.84 + walkBob;
+                const drawY = player.height / 2 - drawHeight * visibleBounds.bottom + walkBob;
                 ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(
                     playerSprite,
@@ -1984,7 +1995,7 @@ export function createWaterFestivalGame({
                     0,
                     Math.round(frameWidth),
                     playerSprite.naturalHeight,
-                    Math.round(-drawWidth / 2),
+                    Math.round(drawX),
                     Math.round(drawY),
                     drawWidth,
                     drawHeight
