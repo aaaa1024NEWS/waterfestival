@@ -13,6 +13,15 @@ export async function saveLeaderboardRecord(record) {
     return { record: normalized, saved: false, reason: 'not-configured' };
   }
 
+  if (
+    normalized.stage1Ms <= 0
+    || normalized.stage2Ms <= 0
+    || normalized.stage3Ms <= 0
+    || normalized.totalMs <= 0
+  ) {
+    return { record: normalized, saved: false, reason: 'invalid-time' };
+  }
+
   const { data, error } = await supabase
     .from(LEADERBOARD_TABLE)
     .insert({
@@ -39,6 +48,10 @@ export async function fetchLeaderboard(limit = 20) {
   const { data, error } = await supabase
     .from(LEADERBOARD_TABLE)
     .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at')
+    .gt('stage1_ms', 0)
+    .gt('stage2_ms', 0)
+    .gt('stage3_ms', 0)
+    .gt('total_ms', 0)
     .order('total_ms', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(limit);
