@@ -114,7 +114,7 @@ function App() {
       .then(async ({ record, saved, reason }) => {
         if (cancelled) return;
         if (!saved) {
-          setRunSaveState(reason === 'not-configured' ? 'not-configured' : reason === 'invalid-time' ? 'invalid-time' : 'error');
+          setRunSaveState(reason === 'not-configured' ? 'not-configured' : 'error');
           return;
         }
         setRunSaveState('saved');
@@ -348,7 +348,6 @@ function App() {
                 {runSaveState === 'saving' && '기록을 리더보드에 저장하는 중...'}
                 {runSaveState === 'saved' && '기록이 리더보드에 등록되었습니다.'}
                 {runSaveState === 'not-configured' && 'Supabase 설정 후 이 기록이 리더보드에 등록됩니다.'}
-                {runSaveState === 'invalid-time' && '초시계 기록이 없어 저장하지 않았습니다. 게임을 끝까지 플레이해주세요.'}
                 {runSaveState === 'error' && '기록 저장에 실패했습니다. Supabase 설정을 확인해주세요.'}
               </p>
               <div className="treasure-grid">

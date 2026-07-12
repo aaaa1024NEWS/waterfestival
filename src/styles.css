@@ -407,8 +407,7 @@ button:disabled {
 }
 
 .run-save-status--error,
-.run-save-status--not-configured,
-.run-save-status--invalid-time {
+.run-save-status--not-configured {
   color: #fbbf24;
 }
 
