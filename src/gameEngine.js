@@ -70,7 +70,7 @@ const treasurePopupAssetModules = import.meta.glob('../assets/treasure-popups/*.
     import: 'default',
     query: '?url'
 });
-const PLAYER_SPRITE_FRAME_COUNT = 4;
+const PLAYER_SPRITE_FRAME_COUNT = 6;
 
 const treasurePopupAssets = Object.fromEntries(
     Object.entries(treasurePopupAssetModules).map(([path, url]) => [
@@ -886,6 +886,8 @@ export function createWaterFestivalGame({
             dashSpeed: 15.0,
             isDashing: false,
             canDash: true,
+            shootTimer: 0,
+            shootPose: 'forward',
 
             color: '#f8fafc',
             facing: 'right'
@@ -1137,6 +1139,8 @@ export function createWaterFestivalGame({
             player.hasDoubleJumped = false;
             player.isDashing = false;
             player.canDash = true;
+            player.shootTimer = 0;
+            player.shootPose = 'forward';
 
             particles = [];
             bullets = [];
@@ -1281,6 +1285,9 @@ export function createWaterFestivalGame({
             const px = player.x + player.width / 2;
             const py = player.y + player.height / 2;
             const angle = Math.atan2(mouse.y - py, mouse.x - px);
+            const isDownwardShot = angle > Math.PI / 4 && angle < Math.PI * 3 / 4;
+            player.shootTimer = 14;
+            player.shootPose = isDownwardShot ? 'down' : 'forward';
 
             // 반동 메커니즘
             const deg = angle * (180 / Math.PI);
@@ -1392,6 +1399,8 @@ export function createWaterFestivalGame({
             player.isGrounded = false;
             player.isWallSliding = false;
             player.wallSlidingSide = null;
+            player.shootTimer = 0;
+            player.shootPose = 'forward';
         }
 
         function update() {
@@ -1403,6 +1412,7 @@ export function createWaterFestivalGame({
 
             // 대시 연산
             if (player.dashCooldown > 0) player.dashCooldown--;
+            if (player.shootTimer > 0) player.shootTimer--;
             
             if (player.isDashing) {
                 player.vx = player.dashDirection * player.dashSpeed;
@@ -1949,20 +1959,24 @@ export function createWaterFestivalGame({
 
             const playerSprite = getCachedImage(playerSpritesheetUrl);
             const isWalking = player.isGrounded && Math.abs(player.vx) > 0.35;
-            const spriteFrame = player.isDashing
-                ? 2
-                : !player.isGrounded
-                    ? 3
-                    : isWalking
-                        ? 1 + Math.floor(performance.now() / 130) % 2
-                        : 0;
+            const isShooting = player.shootTimer > 0;
+            const spriteFrame = isShooting
+                ? (player.shootPose === 'down' ? 5 : 3)
+                : player.isDashing
+                    ? 2
+                    : !player.isGrounded
+                        ? 4
+                        : isWalking
+                            ? 1 + Math.floor(performance.now() / 160) % 2
+                            : 0;
 
             if (playerSprite && playerSprite.complete && playerSprite.naturalWidth > 0) {
                 const previousSmoothing = ctx.imageSmoothingEnabled;
                 const frameWidth = playerSprite.naturalWidth / PLAYER_SPRITE_FRAME_COUNT;
                 const drawWidth = 50;
                 const drawHeight = 65;
-                const drawY = player.height / 2 - drawHeight * 0.84;
+                const walkBob = isWalking ? Math.sin(performance.now() / 95) * 0.8 : 0;
+                const drawY = player.height / 2 - drawHeight * 0.84 + walkBob;
                 ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(
                     playerSprite,
