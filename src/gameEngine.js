@@ -222,6 +222,58 @@ export function createWaterFestivalGame({
         const stageBackgroundImageCache = new Map();
         const assetBoundsCache = new Map();
         let treasurePopup = null;
+        let treasureAudioContext = null;
+
+        function playTreasureDiscoverySound() {
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) return;
+
+                treasureAudioContext ??= new AudioContextClass();
+                const audioContext = treasureAudioContext;
+                const now = audioContext.currentTime;
+                const master = audioContext.createGain();
+                master.gain.setValueAtTime(0.0001, now);
+                master.gain.exponentialRampToValueAtTime(0.16, now + 0.035);
+                master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
+                master.connect(audioContext.destination);
+
+                [392, 523.25, 659.25, 783.99].forEach((frequency, index) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    const start = now + index * 0.075;
+                    oscillator.type = index === 0 ? 'sine' : 'triangle';
+                    oscillator.frequency.setValueAtTime(frequency, start);
+                    oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.06, start + 0.48);
+                    gain.gain.setValueAtTime(0.0001, start);
+                    gain.gain.exponentialRampToValueAtTime(0.7 / (index + 1), start + 0.025);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.62);
+                    oscillator.connect(gain);
+                    gain.connect(master);
+                    oscillator.start(start);
+                    oscillator.stop(start + 0.66);
+                });
+
+                const shimmer = audioContext.createOscillator();
+                const shimmerGain = audioContext.createGain();
+                shimmer.type = 'sine';
+                shimmer.frequency.setValueAtTime(1174.66, now + 0.16);
+                shimmer.frequency.exponentialRampToValueAtTime(1760, now + 0.9);
+                shimmerGain.gain.setValueAtTime(0.0001, now + 0.16);
+                shimmerGain.gain.exponentialRampToValueAtTime(0.12, now + 0.21);
+                shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+                shimmer.connect(shimmerGain);
+                shimmerGain.connect(master);
+                shimmer.start(now + 0.16);
+                shimmer.stop(now + 1.05);
+
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().catch(() => {});
+                }
+            } catch {
+                // Sound is an enhancement; unsupported audio must not interrupt gameplay.
+            }
+        }
 
         const hollowPalette = {
             void: '#030712',
@@ -307,6 +359,69 @@ export function createWaterFestivalGame({
                 const w = Math.min(tileW, dx + dw - x);
                 drawAssetImage(image, x, dy, w, dh);
             }
+            return true;
+        }
+
+        // Keep platform art proportional while making its visible bounds match the collision rectangle.
+        function drawNaturalPlatformAsset(image, rect) {
+            const bounds = getAssetBounds(image);
+            if (!bounds || rect.w <= 0 || rect.h <= 0) return false;
+
+            const tileW = Math.max(1, rect.h * bounds.w / bounds.h);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(rect.x, rect.y, rect.w, rect.h);
+            ctx.clip();
+
+            for (let x = rect.x; x < rect.x + rect.w - 0.5; x += tileW) {
+                const destW = Math.min(tileW, rect.x + rect.w - x);
+                const sourceW = bounds.w * destW / tileW;
+                ctx.drawImage(
+                    image,
+                    bounds.x,
+                    bounds.y,
+                    sourceW,
+                    bounds.h,
+                    x,
+                    rect.y,
+                    destW,
+                    rect.h
+                );
+            }
+
+            ctx.restore();
+            return true;
+        }
+
+        // Walls use repeated proportional sections, clipped to the exact wall hitbox.
+        function drawNaturalWallAsset(image, rect) {
+            const bounds = getAssetBounds(image);
+            if (!bounds || rect.w <= 0 || rect.h <= 0) return false;
+
+            const tileW = Math.max(rect.w, Math.min(240, rect.w * 4));
+            const tileH = Math.max(1, tileW * bounds.h / bounds.w);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(rect.x, rect.y, rect.w, rect.h);
+            ctx.clip();
+
+            for (let y = rect.y; y < rect.y + rect.h - 0.5; y += tileH) {
+                const destH = Math.min(tileH, rect.y + rect.h - y);
+                const sourceH = bounds.h * destH / tileH;
+                ctx.drawImage(
+                    image,
+                    bounds.x,
+                    bounds.y,
+                    bounds.w,
+                    sourceH,
+                    rect.x,
+                    y,
+                    tileW,
+                    destH
+                );
+            }
+
+            ctx.restore();
             return true;
         }
 
@@ -1241,6 +1356,7 @@ export function createWaterFestivalGame({
                     if (dist < item.r + Math.max(player.width, player.height)/2) {
                         item.collected = true;
                         createCollectParticles(item.x, item.y, item.color);
+                        playTreasureDiscoverySound();
                         showTreasurePopup(item);
                         break;
                     }
@@ -1522,8 +1638,7 @@ export function createWaterFestivalGame({
             platforms.forEach(p => {
                 if (p.type === 'ground' || p.type === 'rock') {
                     // 발판 베이스 암석/대지
-                    const platformTileW = Math.max(96, Math.min(260, p.h * 2.4));
-                    const drewPlatformImage = drawTiledAssetImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h, platformTileW);
+                    const drewPlatformImage = drawNaturalPlatformAsset(stagePlatformImages.platform, p);
                     if (!drewPlatformImage) {
                         ctx.fillStyle = hollowPalette.platform;
                         ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -1536,7 +1651,7 @@ export function createWaterFestivalGame({
 
                 } else if (p.type === 'waterfall_wall') {
                     // 벽타기 특화 수직 벽면
-                    const drewWallImage = drawAssetImage(stagePlatformImages.platform, p.x, p.y, p.w, p.h);
+                    const drewWallImage = drawNaturalWallAsset(stagePlatformImages.platform, p);
                     if (!drewWallImage) {
                         if (currentStage === 1) {
                             ctx.fillStyle = '#451a03'; // 황토빛 동굴벽 느낌
