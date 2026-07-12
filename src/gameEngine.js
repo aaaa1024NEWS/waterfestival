@@ -223,14 +223,115 @@ export function createWaterFestivalGame({
         const assetBoundsCache = new Map();
         let treasurePopup = null;
         let treasureAudioContext = null;
+        let backgroundMusicTimer = null;
+        let backgroundMusicGain = null;
+        const backgroundMusicNodes = new Set();
+
+        const BACKGROUND_MUSIC_PROFILES = {
+            1: {
+                interval: 1150,
+                notes: [261.63, 329.63, 392, 493.88, 392, 329.63],
+                type: 'triangle',
+                volume: 0.08
+            },
+            2: {
+                interval: 620,
+                notes: [392, 493.88, 587.33, 659.25, 587.33, 493.88, 392, 329.63],
+                type: 'square',
+                volume: 0.045
+            },
+            3: {
+                interval: 820,
+                notes: [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25],
+                type: 'sine',
+                volume: 0.07
+            }
+        };
+
+        function getAudioContext() {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return null;
+            treasureAudioContext ??= new AudioContextClass();
+            if (treasureAudioContext.state === 'suspended') {
+                treasureAudioContext.resume().catch(() => {});
+            }
+            return treasureAudioContext;
+        }
+
+        function stopBackgroundMusic() {
+            if (backgroundMusicTimer) {
+                window.clearInterval(backgroundMusicTimer);
+                backgroundMusicTimer = null;
+            }
+
+            backgroundMusicNodes.forEach((node) => {
+                try {
+                    node.stop();
+                } catch {
+                    // The node may already be stopped.
+                }
+            });
+            backgroundMusicNodes.clear();
+
+            if (backgroundMusicGain && treasureAudioContext) {
+                const now = treasureAudioContext.currentTime;
+                backgroundMusicGain.gain.cancelScheduledValues(now);
+                backgroundMusicGain.gain.setValueAtTime(backgroundMusicGain.gain.value || 0.0001, now);
+                backgroundMusicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+            }
+            backgroundMusicGain = null;
+        }
+
+        function playBackgroundMusicNote(context, destination, frequency, profile, delay = 0) {
+            const start = context.currentTime + delay;
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.type = profile.type;
+            oscillator.frequency.setValueAtTime(frequency, start);
+            oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.015, start + 0.42);
+            gain.gain.setValueAtTime(0.0001, start);
+            gain.gain.exponentialRampToValueAtTime(profile.volume, start + 0.035);
+            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.72);
+            oscillator.connect(gain);
+            gain.connect(destination);
+            oscillator.start(start);
+            oscillator.stop(start + 0.76);
+            backgroundMusicNodes.add(oscillator);
+            oscillator.addEventListener('ended', () => backgroundMusicNodes.delete(oscillator), { once: true });
+        }
+
+        function startBackgroundMusic(stage) {
+            stopBackgroundMusic();
+            const context = getAudioContext();
+            const profile = BACKGROUND_MUSIC_PROFILES[stage] ?? BACKGROUND_MUSIC_PROFILES[1];
+            if (!context) return;
+
+            backgroundMusicGain = context.createGain();
+            backgroundMusicGain.gain.setValueAtTime(0.0001, context.currentTime);
+            backgroundMusicGain.gain.exponentialRampToValueAtTime(1, context.currentTime + 0.35);
+            backgroundMusicGain.connect(context.destination);
+
+            let noteIndex = 0;
+            const playPhrase = () => {
+                const note = profile.notes[noteIndex % profile.notes.length];
+                playBackgroundMusicNote(context, backgroundMusicGain, note, profile);
+                if (stage === 2 && noteIndex % 4 === 0) {
+                    playBackgroundMusicNote(context, backgroundMusicGain, note / 2, { ...profile, volume: 0.025 }, 0.02);
+                }
+                if (stage === 3 && noteIndex % 3 === 0) {
+                    playBackgroundMusicNote(context, backgroundMusicGain, note * 2, { ...profile, volume: 0.025 }, 0.12);
+                }
+                noteIndex += 1;
+            };
+
+            playPhrase();
+            backgroundMusicTimer = window.setInterval(playPhrase, profile.interval);
+        }
 
         function playTreasureDiscoverySound() {
             try {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                if (!AudioContextClass) return;
-
-                treasureAudioContext ??= new AudioContextClass();
-                const audioContext = treasureAudioContext;
+                const audioContext = getAudioContext();
+                if (!audioContext) return;
                 const now = audioContext.currentTime;
                 const master = audioContext.createGain();
                 master.gain.setValueAtTime(0.0001, now);
@@ -414,6 +515,41 @@ export function createWaterFestivalGame({
                     bounds.y,
                     bounds.w,
                     sourceH,
+                    rect.x,
+                    y,
+                    tileW,
+                    destH
+                );
+            }
+
+            ctx.restore();
+            return true;
+        }
+
+        // Vertical structures use only the rock body so repeated sections do not grow grass caps.
+        function drawRockOnlyWallAsset(image, rect) {
+            const bounds = getAssetBounds(image);
+            if (!bounds || rect.w <= 0 || rect.h <= 0) return false;
+
+            const cropTop = Math.round(bounds.h * 0.48);
+            const sourceY = bounds.y + cropTop;
+            const sourceH = Math.max(1, bounds.h - cropTop);
+            const tileW = Math.max(rect.w, Math.min(240, rect.w * 4));
+            const tileH = Math.max(1, tileW * sourceH / bounds.w);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(rect.x, rect.y, rect.w, rect.h);
+            ctx.clip();
+
+            for (let y = rect.y; y < rect.y + rect.h - 0.5; y += tileH) {
+                const destH = Math.min(tileH, rect.y + rect.h - y);
+                const sourceTileH = sourceH * destH / tileH;
+                ctx.drawImage(
+                    image,
+                    bounds.x,
+                    sourceY,
+                    bounds.w,
+                    sourceTileH,
                     rect.x,
                     y,
                     tileW,
@@ -1033,6 +1169,7 @@ export function createWaterFestivalGame({
             treasurePopup = null;
             onTreasurePopupChange(null);
             setupStage();
+            startBackgroundMusic(currentStage);
             notifyGameState();
             notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
@@ -1379,6 +1516,7 @@ export function createWaterFestivalGame({
                         notifyGameState();
                     } else {
                         gameState = 'CLEAR';
+                        stopBackgroundMusic();
                         notifyGameState();
                         notifyRunStats(true);
                         onRunComplete({
@@ -1638,7 +1776,9 @@ export function createWaterFestivalGame({
             platforms.forEach(p => {
                 if (p.type === 'ground' || p.type === 'rock') {
                     // 발판 베이스 암석/대지
-                    const drewPlatformImage = drawNaturalPlatformAsset(stagePlatformImages.platform, p);
+                    const drewPlatformImage = p.h >= 90
+                        ? drawRockOnlyWallAsset(stagePlatformImages.platform, p)
+                        : drawNaturalPlatformAsset(stagePlatformImages.platform, p);
                     if (!drewPlatformImage) {
                         ctx.fillStyle = hollowPalette.platform;
                         ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -1651,7 +1791,7 @@ export function createWaterFestivalGame({
 
                 } else if (p.type === 'waterfall_wall') {
                     // 벽타기 특화 수직 벽면
-                    const drewWallImage = drawNaturalWallAsset(stagePlatformImages.platform, p);
+                    const drewWallImage = drawRockOnlyWallAsset(stagePlatformImages.platform, p);
                     if (!drewWallImage) {
                         if (currentStage === 1) {
                             ctx.fillStyle = '#451a03'; // 황토빛 동굴벽 느낌
@@ -1933,6 +2073,7 @@ export function createWaterFestivalGame({
             runStats.currentStage = currentStage;
             lastFrameTime = performance.now();
             setupStage();
+            startBackgroundMusic(currentStage);
             notifyGameState();
             notifyRunStats(true);
             setTimeout(forceFocusOnGame, 50);
@@ -2016,6 +2157,11 @@ export function createWaterFestivalGame({
             destroy() {
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
+                }
+                stopBackgroundMusic();
+                if (treasureAudioContext) {
+                    treasureAudioContext.close().catch(() => {});
+                    treasureAudioContext = null;
                 }
                 canvas.removeEventListener('click', handleCanvasClick);
                 window.removeEventListener('keydown', handleKeyDown);
