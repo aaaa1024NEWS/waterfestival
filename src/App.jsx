@@ -426,7 +426,12 @@ function App() {
                   </div>
                 </div>
                 <footer>
-                  {popupCanClose ? <button type="button" onClick={closeTreasurePopup}>닫기</button> : <p>보물 설명을 읽어보세요. 3초 뒤 닫기 버튼이 나타납니다.</p>}
+                  {popupCanClose ? (
+                    <>
+                      <button type="button" onClick={closeTreasurePopup}>닫기</button>
+                      <p>{playMode === 'mobile' ? '팝업의 아무 곳이나 누르면 닫을 수 있습니다.' : '팝업 버튼 또는 아무 키나 누르면 닫을 수 있습니다.'}</p>
+                    </>
+                  ) : <p>보물 설명을 읽어보세요. 3초 뒤 닫기 버튼이 나타납니다.</p>}
                 </footer>
               </article>
             </div>
