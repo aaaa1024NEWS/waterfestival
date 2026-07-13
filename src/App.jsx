@@ -147,6 +147,19 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [treasurePopup]);
 
+  useEffect(() => {
+    if (!treasurePopup || !popupCanClose) return undefined;
+
+    const handlePopupKeyDown = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      gameRef.current?.closeTreasurePopup();
+    };
+
+    window.addEventListener('keydown', handlePopupKeyDown, true);
+    return () => window.removeEventListener('keydown', handlePopupKeyDown, true);
+  }, [treasurePopup, popupCanClose]);
+
   const selectedMode = PLAY_MODES[selectedModeIndex];
   const cleanNickname = nickname.trim().replace(/\s+/g, ' ').slice(0, 12);
   const nicknameReady = cleanNickname.length > 0;
@@ -206,6 +219,13 @@ function App() {
 
   const closeTreasurePopup = () => {
     if (popupCanClose) gameRef.current?.closeTreasurePopup();
+  };
+
+  const handleTreasurePopupPointerDown = (event) => {
+    if (playMode !== 'mobile' || !popupCanClose) return;
+    event.preventDefault();
+    event.stopPropagation();
+    gameRef.current?.closeTreasurePopup();
   };
 
   const pressMove = (direction) => (event) => {
@@ -387,7 +407,13 @@ function App() {
           )}
 
           {treasurePopup && (
-            <div className="treasure-popup-overlay" role="dialog" aria-modal="true" aria-labelledby="treasure-popup-title">
+            <div
+              className="treasure-popup-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="treasure-popup-title"
+              onPointerDown={handleTreasurePopupPointerDown}
+            >
               <article className="treasure-popup-card">
                 <header>장흥 보물 획득</header>
                 <div className="treasure-popup-content">
