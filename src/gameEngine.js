@@ -1069,6 +1069,112 @@ export function createWaterFestivalGame({
             }
         };
 
+        const clampLayoutValue = (value, min, max) => Math.min(max, Math.max(min, value));
+        const randomLayoutOffset = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+        function getLayoutAnchorIndex(platformsToCheck, position) {
+            let bestIndex = 0;
+            let bestScore = Infinity;
+
+            platformsToCheck.forEach((platform, index) => {
+                const horizontalDistance = position.x < platform.x
+                    ? platform.x - position.x
+                    : position.x > platform.x + platform.w
+                        ? position.x - (platform.x + platform.w)
+                        : 0;
+                const expectedItemY = platform.y - 60;
+                const score = horizontalDistance * 4 + Math.abs(expectedItemY - position.y);
+                if (score < bestScore) {
+                    bestIndex = index;
+                    bestScore = score;
+                }
+            });
+
+            return bestIndex;
+        }
+
+        function createLayoutGapZones(layoutPlatforms) {
+            const intervals = layoutPlatforms
+                .map((platform) => ({ start: platform.x, end: platform.x + platform.w }))
+                .sort((a, b) => a.start - b.start);
+            const mergedIntervals = [];
+
+            intervals.forEach((interval) => {
+                const previous = mergedIntervals[mergedIntervals.length - 1];
+                if (previous && interval.start <= previous.end) {
+                    previous.end = Math.max(previous.end, interval.end);
+                } else {
+                    mergedIntervals.push({ ...interval });
+                }
+            });
+
+            const gaps = [];
+            let cursor = 0;
+            mergedIntervals.forEach((interval) => {
+                const start = Math.max(0, cursor);
+                const end = Math.min(levelWidth, interval.start);
+                if (end - start > 1) gaps.push({ x: start, y: 900, w: end - start, h: 240 });
+                cursor = Math.max(cursor, interval.end);
+            });
+
+            if (levelWidth - cursor > 1) {
+                gaps.push({ x: cursor, y: 900, w: levelWidth - cursor, h: 240 });
+            }
+
+            return gaps;
+        }
+
+        function createRandomizedStageLayout(stage) {
+            const baseLayout = STAGE_LAYOUTS[stage] ?? STAGE_LAYOUTS[1];
+            const basePlatforms = baseLayout.platforms.map((platform) => ({ ...platform }));
+            const randomizedPlatforms = basePlatforms.map((platform) => ({ ...platform }));
+            const routeEntries = basePlatforms
+                .map((platform, index) => ({ platform, index }))
+                .filter(({ platform }) => platform.type === 'rock' && platform.h < 90)
+                .sort((a, b) => a.platform.x - b.platform.x);
+            const startingGround = basePlatforms.find((platform) => platform.type === 'ground' && platform.x === 0);
+            const endingGround = [...basePlatforms]
+                .filter((platform) => platform.type === 'ground')
+                .sort((a, b) => b.x - a.x)[0];
+
+            routeEntries.forEach(({ platform, index }, routeIndex) => {
+                const previous = routeEntries[routeIndex - 1]?.platform ?? startingGround;
+                const next = routeEntries[routeIndex + 1]?.platform ?? endingGround;
+                const minX = previous ? previous.x + previous.w + 32 : platform.x - 24;
+                const maxX = next ? next.x - platform.w - 32 : platform.x + 24;
+                const x = maxX >= minX
+                    ? clampLayoutValue(platform.x + randomLayoutOffset(-42, 42), minX, maxX)
+                    : platform.x;
+                const y = clampLayoutValue(platform.y + randomLayoutOffset(-42, 42), 450, 845);
+
+                randomizedPlatforms[index] = { ...platform, x, y };
+            });
+
+            const randomizedSpawnPositions = baseLayout.spawnPositions.map((position) => {
+                const anchorIndex = getLayoutAnchorIndex(basePlatforms, position);
+                const basePlatform = basePlatforms[anchorIndex];
+                const randomizedPlatform = randomizedPlatforms[anchorIndex];
+                return {
+                    ...position,
+                    x: clampLayoutValue(position.x + randomizedPlatform.x - basePlatform.x, 40, levelWidth - 40),
+                    y: clampLayoutValue(position.y + randomizedPlatform.y - basePlatform.y, 360, 860)
+                };
+            });
+            const gapZones = createLayoutGapZones(randomizedPlatforms);
+            const hazardPrefix = { 1: '억새밭', 2: '토요시장', 3: '물축제장' }[stage] ?? '탐험';
+
+            return {
+                ...baseLayout,
+                spawnPositions: randomizedSpawnPositions,
+                platforms: randomizedPlatforms,
+                hazards: gapZones
+                    .filter((gap) => gap.w > 28)
+                    .map((gap, index) => ({ ...gap, h: 120, name: `${hazardPrefix} 낙사 구간 ${index + 1}` })),
+                pitDeathZones: gapZones,
+                goal: { ...baseLayout.goal }
+            };
+        }
+
         let spawnPositions = [];
         let platforms = [];
         let hazards = [];
@@ -1204,7 +1310,7 @@ export function createWaterFestivalGame({
 
         // 스테이지 변환 처리
         function applyStageLayout() {
-            const layout = STAGE_LAYOUTS[currentStage] ?? STAGE_LAYOUTS[1];
+            const layout = createRandomizedStageLayout(currentStage);
             spawnPositions = layout.spawnPositions;
             platforms = layout.platforms;
             hazards = layout.hazards;
