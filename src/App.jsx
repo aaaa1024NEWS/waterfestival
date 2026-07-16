@@ -271,6 +271,21 @@ function App() {
     await startGame();
   };
 
+  const returnToMainMenu = () => {
+    setPlayMode(null);
+    setGameState('START');
+    setStageBadge(1);
+    setTransitionMessage('');
+    setTreasurePopup(null);
+    setPopupCanClose(false);
+    setLeaderboardOpen(false);
+    setLastRun(null);
+    setRunSaveState('idle');
+    setRunStats(EMPTY_RUN_STATS);
+    runProgressRef.current = null;
+    runProgressWriteRef.current = Promise.resolve();
+  };
+
   const closeTreasurePopup = () => {
     if (popupCanClose) gameRef.current?.closeTreasurePopup();
   };
@@ -477,7 +492,10 @@ function App() {
                   </section>
                 ))}
               </div>
-              <button className="success-button" type="button" onClick={restartGame}>처음부터 다시하기</button>
+              <div className="clear-actions">
+                <button className="success-button" type="button" onClick={restartGame}>처음부터 다시하기</button>
+                <button className="ghost-button" type="button" onClick={returnToMainMenu}>메인 화면으로</button>
+              </div>
             </div>
           )}
 

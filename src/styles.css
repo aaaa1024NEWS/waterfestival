@@ -395,6 +395,15 @@ button:disabled {
   gap: 12px;
 }
 
+.clear-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+
 .run-save-status {
   min-height: 1.2em;
   margin: -4px 0 0;
@@ -1287,6 +1296,11 @@ button:disabled {
 
   .button-row {
     width: min(100%, 330px);
+    gap: 8px;
+  }
+
+  .clear-actions {
+    width: 100%;
     gap: 8px;
   }
 
