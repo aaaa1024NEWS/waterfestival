@@ -5,8 +5,10 @@ import {
   completeLeaderboardRun,
   fetchLeaderboard,
   getLeaderboardStatus,
+  getLeaderboardDateKey,
   saveLeaderboardRecord,
   saveLeaderboardStageProgress,
+  shiftLeaderboardDate,
   startLeaderboardRun
 } from './lib/leaderboard';
 
@@ -52,6 +54,11 @@ function formatDuration(milliseconds = 0) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
 }
 
+function formatLeaderboardDate(dateKey, todayDateKey) {
+  const [year, month, day] = dateKey.split('-');
+  return `${year}.${month}.${day}${dateKey === todayDateKey ? ' (오늘)' : ''}`;
+}
+
 function createClientRunId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -73,13 +80,42 @@ function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboardRows, setLeaderboardRows] = useState([]);
   const [leaderboardState, setLeaderboardState] = useState('idle');
+  const [leaderboardDate, setLeaderboardDate] = useState(() => getLeaderboardDateKey());
+  const [todayDateKey, setTodayDateKey] = useState(() => getLeaderboardDateKey());
   const [runSaveState, setRunSaveState] = useState('idle');
   const runProgressRef = useRef(null);
   const runProgressWriteRef = useRef(Promise.resolve());
+  const leaderboardDateRef = useRef(leaderboardDate);
+  const previousTodayDateRef = useRef(todayDateKey);
 
   useEffect(() => {
     const prefersMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
     if (prefersMobile) setSelectedModeIndex(1);
+  }, []);
+
+  useEffect(() => {
+    leaderboardDateRef.current = leaderboardDate;
+  }, [leaderboardDate]);
+
+  useEffect(() => {
+    let rolloverTimer;
+
+    const scheduleRollover = () => {
+      const currentDate = getLeaderboardDateKey();
+      const nextDate = shiftLeaderboardDate(currentDate, 1);
+      const nextMidnight = new Date(`${nextDate}T00:00:00+09:00`).getTime();
+      rolloverTimer = window.setTimeout(() => {
+        const previousDate = previousTodayDateRef.current;
+        const rolledDate = getLeaderboardDateKey();
+        previousTodayDateRef.current = rolledDate;
+        setTodayDateKey(rolledDate);
+        setLeaderboardDate((selectedDate) => selectedDate === previousDate ? rolledDate : selectedDate);
+        scheduleRollover();
+      }, Math.max(1000, nextMidnight - Date.now() + 250));
+    };
+
+    scheduleRollover();
+    return () => window.clearTimeout(rolloverTimer);
   }, []);
 
   useEffect(() => {
@@ -120,9 +156,14 @@ function App() {
               return;
             }
             setRunSaveState('saved');
-            setLeaderboardRows((rows) => [savedRecord, ...rows]
-              .sort((a, b) => a.totalMs - b.totalMs)
-              .slice(0, 20));
+            const savedDate = getLeaderboardDateKey(
+              savedRecord.completedAt ? new Date(savedRecord.completedAt) : new Date()
+            );
+            if (savedDate === leaderboardDateRef.current) {
+              setLeaderboardRows((rows) => [savedRecord, ...rows]
+                .sort((a, b) => a.totalMs - b.totalMs)
+                .slice(0, 20));
+            }
           })
           .catch(() => setRunSaveState('error'));
       }
@@ -171,17 +212,30 @@ function App() {
     setPlayMode(selectedMode.id);
   };
 
-  const openLeaderboard = async () => {
+  const openLeaderboard = () => {
+    setLeaderboardDate(getLeaderboardDateKey());
     setLeaderboardOpen(true);
-    setLeaderboardState('loading');
-    try {
-      const result = await fetchLeaderboard();
-      setLeaderboardRows(result.records);
-      setLeaderboardState(result.available ? 'ready' : 'not-configured');
-    } catch {
-      setLeaderboardState('error');
-    }
   };
+
+  useEffect(() => {
+    if (!leaderboardOpen) return undefined;
+
+    let cancelled = false;
+    setLeaderboardState('loading');
+    fetchLeaderboard(20, leaderboardDate)
+      .then((result) => {
+        if (cancelled) return;
+        setLeaderboardRows(result.records);
+        setLeaderboardState(result.available ? 'ready' : 'not-configured');
+      })
+      .catch(() => {
+        if (!cancelled) setLeaderboardState('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [leaderboardOpen, leaderboardDate]);
 
   const requestMobileLandscape = async () => {
     if (playMode !== 'mobile') return;
@@ -319,14 +373,35 @@ function App() {
             <div className="overlay leaderboard-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title">
               <p className="pixel-eyebrow">BEST RUNS</p>
               <div className="overlay-title" id="leaderboard-title">리더보드</div>
-              <p className="leaderboard-caption">닉네임이 기록 앞에 표시됩니다. 전체 시간 기준으로 빠른 순서입니다.</p>
+              <div className="leaderboard-date-nav" aria-label="리더보드 날짜 탐색">
+                <button
+                  type="button"
+                  aria-label="이전 날짜 리더보드"
+                  onClick={() => setLeaderboardDate((date) => shiftLeaderboardDate(date, -1))}
+                >
+                  ◀
+                </button>
+                <strong>{formatLeaderboardDate(leaderboardDate, todayDateKey)}</strong>
+                <button
+                  type="button"
+                  aria-label="다음 날짜 리더보드"
+                  disabled={leaderboardDate >= todayDateKey}
+                  onClick={() => setLeaderboardDate((date) => {
+                    const nextDate = shiftLeaderboardDate(date, 1);
+                    return nextDate > todayDateKey ? date : nextDate;
+                  })}
+                >
+                  ▶
+                </button>
+              </div>
+              <p className="leaderboard-caption">선택한 날짜에 클리어한 기록입니다. 닉네임이 기록 앞에 표시되며 전체 시간 기준으로 빠른 순서입니다.</p>
               {leaderboardState === 'loading' && <p className="leaderboard-message">기록을 불러오는 중...</p>}
               {leaderboardState === 'not-configured' && (
                 <p className="leaderboard-message">Supabase 환경 변수와 game_runs 테이블을 설정하면 기록이 표시됩니다.</p>
               )}
               {leaderboardState === 'error' && <p className="leaderboard-message">리더보드를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>}
               {leaderboardState === 'ready' && leaderboardRows.length === 0 && (
-                <p className="leaderboard-message">아직 등록된 기록이 없습니다. 첫 기록을 남겨보세요.</p>
+                <p className="leaderboard-message">이 날짜에는 등록된 기록이 없습니다. 첫 기록을 남겨보세요.</p>
               )}
               {leaderboardRows.length > 0 && (
                 <div className="leaderboard-table" role="table" aria-label="게임 리더보드">

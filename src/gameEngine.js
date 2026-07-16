@@ -662,7 +662,14 @@ export function createWaterFestivalGame({
         }
 
         function drawStagePlatformDecor(p, decorImage) {
-            return;
+            if (!decorImage || p.type !== 'rock' || p.h > 48 || p.w < 56) {
+                return false;
+            }
+
+            const decorH = Math.min(28, Math.max(18, p.h));
+            const decorY = p.y - decorH + 5;
+            const tileW = Math.max(96, decorH * 4);
+            return drawTiledAssetImage(decorImage, p.x, decorY, p.w, decorH, tileW);
         }
 
         function drawStageHazard(hz, obstacleImage) {
@@ -945,71 +952,133 @@ export function createWaterFestivalGame({
         // 활성 수집품 목록
         let activeItems = [];
 
-        // 보물 소환이 가능한 후보 스폰 위치 좌표들 (12개 지점 중 9개 무작위 선별)
-        const spawnPositions = [
-            { x: 380, y: 740 }, { x: 740, y: 550 }, { x: 1010, y: 440 },
-            { x: 1180, y: 380 }, { x: 1500, y: 240 }, { x: 1750, y: 180 },
-            { x: 1890, y: 310 }, { x: 2040, y: 250 }, { x: 2350, y: 140 },
-            { x: 2750, y: 540 }, { x: 1550, y: 450 }, { x: 2620, y: 380 }
-        ];
+        // 각 스테이지는 지형, 함정, 낙사 구역, 보물 위치를 독립적으로 가집니다.
+        const STAGE_LAYOUTS = {
+            1: {
+                spawnPositions: [
+                    { x: 260, y: 840 }, { x: 680, y: 760 }, { x: 920, y: 640 },
+                    { x: 1160, y: 740 }, { x: 1490, y: 550 }, { x: 1730, y: 430 },
+                    { x: 1970, y: 320 }, { x: 2210, y: 440 }, { x: 2470, y: 560 },
+                    { x: 2700, y: 670 }, { x: 1350, y: 440 }, { x: 2020, y: 560 }
+                ],
+                platforms: [
+                    { x: 0, y: 900, w: 520, h: 100, type: 'ground' },
+                    { x: 610, y: 820, w: 170, h: 30, type: 'rock' },
+                    { x: 850, y: 700, w: 150, h: 30, type: 'rock' },
+                    { x: 1080, y: 780, w: 240, h: 30, type: 'rock' },
+                    { x: 1270, y: 500, w: 46, h: 400, type: 'rock' },
+                    { x: 1430, y: 610, w: 180, h: 30, type: 'rock' },
+                    { x: 1680, y: 490, w: 150, h: 30, type: 'rock' },
+                    { x: 1910, y: 380, w: 170, h: 30, type: 'rock' },
+                    { x: 2140, y: 500, w: 170, h: 30, type: 'rock' },
+                    { x: 2380, y: 620, w: 170, h: 30, type: 'rock' },
+                    { x: 2610, y: 730, w: 180, h: 30, type: 'rock' },
+                    { x: 2830, y: 820, w: 370, h: 180, type: 'ground' }
+                ],
+                hazards: [
+                    { x: 520, y: 880, w: 90, h: 120, name: '초입 가시 함정' },
+                    { x: 1000, y: 900, w: 80, h: 100, name: '바위 골짜기' },
+                    { x: 1610, y: 900, w: 70, h: 100, name: '억새 절벽' },
+                    { x: 2310, y: 900, w: 70, h: 100, name: '산길 골짜기' },
+                    { x: 2790, y: 900, w: 40, h: 100, name: '하산 절벽' }
+                ],
+                pitDeathZones: [
+                    { x: 520, y: 900, w: 90, h: 240 }, { x: 780, y: 900, w: 70, h: 240 },
+                    { x: 1000, y: 900, w: 80, h: 240 }, { x: 1320, y: 900, w: 110, h: 240 },
+                    { x: 1610, y: 900, w: 70, h: 240 }, { x: 1830, y: 900, w: 80, h: 240 },
+                    { x: 2080, y: 900, w: 60, h: 240 }, { x: 2310, y: 900, w: 70, h: 240 },
+                    { x: 2550, y: 900, w: 60, h: 240 }, { x: 2790, y: 900, w: 40, h: 240 }
+                ],
+                goal: { x: 3100, y: 740, w: 70, h: 80, name: '아치 게이트' }
+            },
+            2: {
+                spawnPositions: [
+                    { x: 220, y: 840 }, { x: 540, y: 760 }, { x: 800, y: 640 },
+                    { x: 1080, y: 760 }, { x: 1340, y: 590 }, { x: 1610, y: 700 },
+                    { x: 1870, y: 500 }, { x: 2140, y: 640 }, { x: 2440, y: 440 },
+                    { x: 2700, y: 590 }, { x: 1450, y: 700 }, { x: 2240, y: 640 }
+                ],
+                platforms: [
+                    { x: 0, y: 900, w: 400, h: 100, type: 'ground' },
+                    { x: 470, y: 820, w: 170, h: 30, type: 'rock' },
+                    { x: 720, y: 700, w: 220, h: 30, type: 'rock' },
+                    { x: 1010, y: 820, w: 180, h: 30, type: 'rock' },
+                    { x: 1270, y: 650, w: 220, h: 30, type: 'rock' },
+                    { x: 1550, y: 760, w: 190, h: 30, type: 'rock' },
+                    { x: 1810, y: 560, w: 190, h: 30, type: 'rock' },
+                    { x: 2070, y: 700, w: 220, h: 30, type: 'rock' },
+                    { x: 2370, y: 500, w: 200, h: 30, type: 'rock' },
+                    { x: 2630, y: 650, w: 180, h: 30, type: 'rock' },
+                    { x: 2880, y: 820, w: 320, h: 180, type: 'ground' }
+                ],
+                hazards: [
+                    { x: 400, y: 880, w: 70, h: 120, name: '시장 입구 가시 함정' },
+                    { x: 1190, y: 900, w: 80, h: 100, name: '상점가 골목' },
+                    { x: 2000, y: 900, w: 70, h: 100, name: '시장 배수로' },
+                    { x: 2570, y: 900, w: 60, h: 100, name: '시장 끝 골짜기' },
+                    { x: 2810, y: 900, w: 70, h: 100, name: '광장 진입로' }
+                ],
+                pitDeathZones: [
+                    { x: 400, y: 900, w: 70, h: 240 }, { x: 640, y: 900, w: 80, h: 240 },
+                    { x: 940, y: 900, w: 70, h: 240 }, { x: 1190, y: 900, w: 80, h: 240 },
+                    { x: 1490, y: 900, w: 60, h: 240 }, { x: 1740, y: 900, w: 70, h: 240 },
+                    { x: 2000, y: 900, w: 70, h: 240 }, { x: 2290, y: 900, w: 80, h: 240 },
+                    { x: 2570, y: 900, w: 60, h: 240 }, { x: 2810, y: 900, w: 70, h: 240 }
+                ],
+                goal: { x: 3120, y: 740, w: 70, h: 80, name: '아치 게이트' }
+            },
+            3: {
+                spawnPositions: [
+                    { x: 200, y: 840 }, { x: 500, y: 740 }, { x: 740, y: 600 },
+                    { x: 990, y: 700 }, { x: 1280, y: 520 }, { x: 1530, y: 660 },
+                    { x: 1780, y: 420 }, { x: 2050, y: 560 }, { x: 2310, y: 360 },
+                    { x: 2600, y: 620 }, { x: 2860, y: 480 }, { x: 3000, y: 760 }
+                ],
+                platforms: [
+                    { x: 0, y: 900, w: 360, h: 100, type: 'ground' },
+                    { x: 430, y: 800, w: 140, h: 30, type: 'rock' },
+                    { x: 650, y: 660, w: 180, h: 30, type: 'rock' },
+                    { x: 920, y: 760, w: 140, h: 30, type: 'rock' },
+                    { x: 1180, y: 580, w: 190, h: 30, type: 'rock' },
+                    { x: 1460, y: 720, w: 150, h: 30, type: 'rock' },
+                    { x: 1700, y: 480, w: 180, h: 30, type: 'rock' },
+                    { x: 1980, y: 620, w: 160, h: 30, type: 'rock' },
+                    { x: 2240, y: 420, w: 200, h: 30, type: 'rock' },
+                    { x: 2520, y: 680, w: 180, h: 30, type: 'rock' },
+                    { x: 2780, y: 540, w: 190, h: 30, type: 'rock' },
+                    { x: 3070, y: 820, w: 130, h: 180, type: 'ground' }
+                ],
+                hazards: [
+                    { x: 360, y: 880, w: 70, h: 120, name: '물축제 입구 가시 함정' },
+                    { x: 830, y: 900, w: 90, h: 100, name: '분수대 틈새' },
+                    { x: 1370, y: 900, w: 90, h: 100, name: '물길 골짜기' },
+                    { x: 1880, y: 900, w: 100, h: 100, name: '물대포 구간' },
+                    { x: 2440, y: 900, w: 80, h: 100, name: '축제장 낭떠러지' },
+                    { x: 2700, y: 900, w: 80, h: 100, name: '분수 언덕 골짜기' },
+                    { x: 2970, y: 900, w: 100, h: 100, name: '최종 물길' }
+                ],
+                pitDeathZones: [
+                    { x: 360, y: 900, w: 70, h: 240 }, { x: 570, y: 900, w: 80, h: 240 },
+                    { x: 830, y: 900, w: 90, h: 240 }, { x: 1060, y: 900, w: 120, h: 240 },
+                    { x: 1370, y: 900, w: 90, h: 240 }, { x: 1610, y: 900, w: 90, h: 240 },
+                    { x: 1880, y: 900, w: 100, h: 240 }, { x: 2140, y: 900, w: 100, h: 240 },
+                    { x: 2440, y: 900, w: 80, h: 240 }, { x: 2700, y: 900, w: 80, h: 240 },
+                    { x: 2970, y: 900, w: 100, h: 240 }
+                ],
+                goal: { x: 3120, y: 740, w: 70, h: 80, name: '아치 게이트' }
+            }
+        };
 
-        // 대규모 천관산 입체 플랫폼 맵 데이터 (공용 골조, 스테이지별 질감/색상 적용)
-        const platforms = [
-            // [구간 1] 탐진강 초입 밸리 바닥 및 발판 (x: 0 ~ 800)
-            { x: 0, y: 900, w: 550, h: 100, type: 'ground' },
-            { x: 650, y: 820, w: 150, h: 30, type: 'rock' },
-            { x: 820, y: 730, w: 100, h: 270, type: 'rock' }, 
-            { x: 680, y: 620, w: 80, h: 30, type: 'rock' },
-
-            // [구간 2] 수직 하강 틈새 및 천관폭포 벽타기 퍼즐구간 (x: 800 ~ 1300)
-            { x: 950, y: 400, w: 30, h: 500, type: 'waterfall_wall' }, 
-            { x: 1080, y: 300, w: 40, h: 600, type: 'rock' }, 
-            { x: 1120, y: 820, w: 250, h: 180, type: 'ground' }, 
-            { x: 1000, y: 520, w: 80, h: 25, type: 'rock' },
-            { x: 1180, y: 450, w: 160, h: 30, type: 'rock' },
-
-            // [구간 3] 억새 고원 공중 부유 징검다리 (x: 1300 ~ 2000)
-            { x: 1420, y: 600, w: 50, h: 400, type: 'rock' },
-            { x: 1550, y: 520, w: 120, h: 25, type: 'rock' },
-            { x: 1720, y: 450, w: 120, h: 25, type: 'rock' },
-            { x: 1880, y: 380, w: 100, h: 25, type: 'rock' },
-            { x: 1750, y: 250, w: 80, h: 25, type: 'rock' },
-            { x: 1500, y: 320, w: 100, h: 25, type: 'rock' },
-
-            // [구간 4] 천관산 최고봉 '연대봉 정상' 거대 암탑 (x: 2000 ~ 2550)
-            { x: 2120, y: 220, w: 380, h: 780, type: 'rock' }, 
-            { x: 1980, y: 750, w: 80, h: 30, type: 'rock' },
-            { x: 2020, y: 590, w: 60, h: 30, type: 'rock' },
-            { x: 1950, y: 460, w: 80, h: 30, type: 'rock' },
-            { x: 2040, y: 320, w: 60, h: 30, type: 'rock' },
-
-            // [구간 5] 하산 절벽 코스 및 최종 축제 광장 (x: 2550 ~ 3200)
-            { x: 2620, y: 450, w: 180, h: 30, type: 'rock' },
-            { x: 2780, y: 620, w: 150, h: 30, type: 'rock' },
-            { x: 2950, y: 830, w: 300, h: 170, type: 'ground' } 
-        ];
-
-        // 수렁 위험 구역들
-        const hazards = [
-            { x: 552, y: 880, w: 96, h: 120, name: '초입 가시 함정' },
-            { x: 820, y: 970, w: 300, h: 30, name: '폭포 소용돌이' },
-            { x: 1370, y: 970, w: 750, h: 30, name: '수성 낭떠러지' },
-            { x: 2500, y: 970, w: 450, h: 30, name: '계곡 수렁' }
-        ];
-
-        // 발판 사이의 모든 고랑을 아래쪽까지 덮어 빠른 낙하도 놓치지 않습니다.
-        const pitDeathZones = [
-            { x: 550, y: 900, w: 100, h: 240 },
-            { x: 800, y: 900, w: 320, h: 240 },
-            { x: 1370, y: 900, w: 750, h: 240 },
-            { x: 2500, y: 900, w: 450, h: 240 }
-        ];
+        let spawnPositions = [];
+        let platforms = [];
+        let hazards = [];
+        let pitDeathZones = [];
 
         const isSolidStructure = (platform) =>
             platform.type === 'waterfall_wall' || (platform.type === 'rock' && platform.h >= 90);
 
         // 최종 아치
-        const goal = { x: 3100, y: 750, w: 70, h: 80, name: '아치 게이트' };
+        let goal = STAGE_LAYOUTS[1].goal;
 
         // 파티클 저장소
         let particles = [];
@@ -1134,7 +1203,17 @@ export function createWaterFestivalGame({
         }
 
         // 스테이지 변환 처리
+        function applyStageLayout() {
+            const layout = STAGE_LAYOUTS[currentStage] ?? STAGE_LAYOUTS[1];
+            spawnPositions = layout.spawnPositions;
+            platforms = layout.platforms;
+            hazards = layout.hazards;
+            pitDeathZones = layout.pitDeathZones;
+            goal = layout.goal;
+        }
+
         function setupStage() {
+            applyStageLayout();
             selectAndPlaceRandomItems();
             
             // 플레이어 원위치 리셋

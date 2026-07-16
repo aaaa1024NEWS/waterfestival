@@ -2,6 +2,25 @@ import { isSupabaseConfigured, supabase } from './supabaseClient';
 import { createRunRecord } from './runRecord';
 
 const LEADERBOARD_TABLE = 'game_runs';
+const KST_OFFSET_HOURS = 9;
+
+export function getLeaderboardDateKey(date = new Date()) {
+  const kstDate = new Date(date.getTime() + KST_OFFSET_HOURS * 60 * 60 * 1000);
+  return kstDate.toISOString().slice(0, 10);
+}
+
+export function shiftLeaderboardDate(dateKey, dayOffset) {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + dayOffset);
+  return date.toISOString().slice(0, 10);
+}
+
+function getLeaderboardDateRange(dateKey) {
+  const start = new Date(`${dateKey}T00:00:00+09:00`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
 
 export function getLeaderboardStatus() {
   return isSupabaseConfigured ? 'ready' : 'not-configured';
@@ -26,7 +45,7 @@ export async function saveLeaderboardRecord(record) {
       completed_at: new Date().toISOString(),
       created_at: normalized.createdAt
     })
-    .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at')
+    .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at, completed_at')
     .single();
 
   if (error) throw error;
@@ -114,29 +133,33 @@ export async function completeLeaderboardRun(id, record) {
       completed_at: new Date().toISOString()
     })
     .eq('id', id)
-    .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at')
+    .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at, completed_at')
     .single();
 
   if (error) throw error;
   return { record: mapLeaderboardRow(data), saved: true };
 }
 
-export async function fetchLeaderboard(limit = 20) {
+export async function fetchLeaderboard(limit = 20, dateKey = getLeaderboardDateKey()) {
   if (!isSupabaseConfigured || !supabase) {
-    return { records: [], available: false, reason: 'not-configured' };
+    return { records: [], available: false, reason: 'not-configured', dateKey };
   }
+
+  const { start, end } = getLeaderboardDateRange(dateKey);
 
   const { data, error } = await supabase
     .from(LEADERBOARD_TABLE)
-    .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at')
+    .select('nickname, play_mode, stage1_ms, stage2_ms, stage3_ms, total_ms, created_at, completed_at')
     .eq('completed', true)
     .gt('total_ms', 0)
+    .gte('completed_at', start.toISOString())
+    .lt('completed_at', end.toISOString())
     .order('total_ms', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(limit);
 
   if (error) throw error;
-  return { records: (data ?? []).map(mapLeaderboardRow), available: true };
+  return { records: (data ?? []).map(mapLeaderboardRow), available: true, dateKey };
 }
 
 function mapLeaderboardRow(row = {}) {
@@ -147,6 +170,7 @@ function mapLeaderboardRow(row = {}) {
     stage2Ms: Math.max(0, Number(row.stage2_ms) || 0),
     stage3Ms: Math.max(0, Number(row.stage3_ms) || 0),
     totalMs: Math.max(0, Number(row.total_ms) || 0),
-    createdAt: row.created_at ?? null
+    createdAt: row.created_at ?? null,
+    completedAt: row.completed_at ?? null
   };
 }
